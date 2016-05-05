@@ -108,7 +108,7 @@ class OstiRecord(object):
     """object defining a MP-specific record for OSTI"""
     def __init__(self, l=None, n=0, doicoll=None, matcoll=None,
                  db_yaml='materials_db_dev.yaml'):
-        self.endpoint = 'https://www.osti.gov/elink/2416api'
+        self.endpoint = os.environ['OSTI_ENDPOINT']
         self.bibtex_parser = bibtex.Parser()
         self.matad = OstiMongoAdapter.from_config(db_yaml=db_yaml) \
             if doicoll is None or matcoll is None else \
@@ -125,6 +125,7 @@ class OstiRecord(object):
                 ('title', self._get_title()),
                 ('creators', 'Kristin Persson'),
                 ('product_nos', self.material['task_id']),
+                ('accession_num', self.material['task_id']),
                 ('contract_nos', 'AC02-05CH11231; EDCBEE'),
                 ('originating_research_org', research_org),
                 ('publication_date', self._get_publication_date()),
