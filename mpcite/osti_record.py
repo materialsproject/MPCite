@@ -1,9 +1,5 @@
-import os
-import requests
-import logging
-import datetime
-import json
-import sys
+import os, requests, logging, json, sys
+from datetime import datetime
 from pymongo import MongoClient
 from monty.serialization import loadfn
 from collections import OrderedDict
@@ -39,28 +35,42 @@ class OstiMongoAdapter(object):
           {'doi': {'$exists': 1}}, {'$unset': {'doi': 1, 'doi_bibtex': 1}}, multi=True
         ))
         logger.info(self.doicoll.remove())
-        dirname = os.path.dirname(os.path.realpath(__file__))
-        filename = os.path.join(dirname, 'dois.json')
-        if os.path.exists(filename):
-            # use json file and set valid = False
-            logger.info('using {} for reset'.format(filename))
-            with open(filename, 'r') as infile:
-                data = json.load(infile)
-                for d in data: d['valid'] = False
-                logger.info(self.doicoll.insert(data))
-        else:
-            logger.warning("No json backup file found. Using manual "
-                           "initialization. Probably outdated!")
-            logger.info(self.doicoll.insert([
-                {'_id': 'mp-12661', 'doi': '10.17188/1178752', 'valid': False,
-                 'created_at': datetime.datetime(2015, 4, 29, 10, 35).isoformat()},
-                {'_id': 'mp-20379', 'doi': '10.17188/1178753', 'valid': False,
-                 'created_at': datetime.datetime(2015, 4, 29, 10, 35).isoformat()},
-                {'_id': 'mp-4', 'doi': '10.17188/1178763', 'valid': False,
-                 'created_at': datetime.datetime(2015, 4, 29, 16, 44).isoformat()},
-                {'_id': 'mp-188', 'doi': '10.17188/1178782', 'valid': False,
-                 'created_at': datetime.datetime(2015, 4, 29, 20, 29).isoformat()},
-            ]))
+        start_record, remaining_num_records = 0, sys.maxsize
+        while remaining_num_records > 0:
+            try:
+                auth = (os.environ['OSTI_USER'], os.environ['OSTI_PASSWORD'])
+                logger.info('get page starting at record {} ...'.format(start_record))
+                r = requests.get(
+                    os.environ['OSTI_ENDPOINT'], auth=auth,
+                    params={'start': start_record}
+                )
+            except:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                logger.warning('%r %r', exc_type, exc_value)
+                return None
+            if r.status_code != 200:
+                logger.warning('Did not reset DB due to {} error.'.format(r.status_code))
+                return None
+            content = parse(r.content)['records']
+            page_size = int(content['@rows'])
+            if start_record == 0:
+                remaining_num_records = int(content['@numfound']) - page_size
+            else:
+                remaining_num_records -= page_size
+            start_record += page_size
+            records = content['record']
+            records = [ records ] if not isinstance(records, list) else records
+            doi_docs = []
+            for ridx,record in enumerate(records):
+                valid = bool(record['@status'] == 'Completed' and record['@released'] == 'Y')
+                created_on = datetime.strptime(record['date_first_submitted'], "%Y-%m-%d")
+                updated_on = datetime.strptime(record['date_last_submitted'], "%Y-%m-%d")
+                doc = {
+                    '_id': record['product_nos'], 'doi': record['doi'], 'valid': valid,
+                    'created_on': created_on, 'updated_on': updated_on
+                }
+                doi_docs.append(doc)
+            logger.info(self.doicoll.insert(doi_docs))
 
     def get_all_dois(self):
         # NOTE: doi info saved in matcoll as `doi` and `doi_bibtex`
@@ -92,7 +102,7 @@ class OstiMongoAdapter(object):
         """save doi info to doicoll, only record update time if exists"""
         dois_insert = [
             {'_id': mpid, 'doi': d['doi'], 'valid': False,
-             'created_at': datetime.datetime.now().isoformat()}
+             'created_at': datetime.now().isoformat()}
             for mpid,d in dois.iteritems() if not d['updated']
         ]
         if dois_insert: logger.info(self.doicoll.insert(dois_insert))
@@ -100,7 +110,7 @@ class OstiMongoAdapter(object):
         if dois_update:
             logger.info(self.doicoll.update(
                 {'_id': {'$in': dois_update}},
-                {'$set': {'updated_at': datetime.datetime.now().isoformat()}},
+                {'$set': {'updated_at': datetime.now().isoformat()}},
                 multi=True
             ))
 
