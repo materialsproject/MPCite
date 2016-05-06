@@ -1,118 +1,13 @@
-import os, requests, logging, json, sys
-from datetime import datetime
-from pymongo import MongoClient
-from monty.serialization import loadfn
+import os, logging, sys
 from collections import OrderedDict
 from dicttoxml import dicttoxml
 from xml.dom.minidom import parseString
 from pybtex.database.input import bibtex
 from StringIO import StringIO
 from xmltodict import parse
+from adapter import OstiMongoAdapter
 
-logger = logging.getLogger('mg.build.osti_doi')
-
-class OstiMongoAdapter(object):
-    """adapter to connect to materials database and collection"""
-    def __init__(self, doicoll, matcoll):
-        self.matcoll = matcoll
-        self.doicoll = doicoll
-
-    @classmethod
-    def from_config(cls, db_yaml='materials_db_dev.yaml'):
-        config = loadfn(os.path.join(os.environ['DB_LOC'], db_yaml))
-        client = MongoClient(config['host'], config['port'], j=False)
-        db = client[config['db']]
-        db.authenticate(config['username'], config['password'])
-        return OstiMongoAdapter(db.dois, db.materials)
-
-    @classmethod
-    def from_collections(cls, doicoll, matcoll):
-        return OstiMongoAdapter(doicoll, matcoll)
-
-    def _reset(self):
-        """remove `doi` keys from matcoll, clear and reinit doicoll"""
-        logger.info(self.matcoll.update(
-          {'doi': {'$exists': 1}}, {'$unset': {'doi': 1, 'doi_bibtex': 1}}, multi=True
-        ))
-        logger.info(self.doicoll.remove())
-        start_record, remaining_num_records = 0, sys.maxsize
-        while remaining_num_records > 0:
-            try:
-                auth = (os.environ['OSTI_USER'], os.environ['OSTI_PASSWORD'])
-                logger.info('get page starting at record {} ...'.format(start_record))
-                r = requests.get(
-                    os.environ['OSTI_ENDPOINT'], auth=auth,
-                    params={'start': start_record}
-                )
-            except:
-                exc_type, exc_value, exc_traceback = sys.exc_info()
-                logger.warning('%r %r', exc_type, exc_value)
-                return None
-            if r.status_code != 200:
-                logger.warning('Did not reset DB due to {} error.'.format(r.status_code))
-                return None
-            content = parse(r.content)['records']
-            page_size = int(content['@rows'])
-            if start_record == 0:
-                remaining_num_records = int(content['@numfound']) - page_size
-            else:
-                remaining_num_records -= page_size
-            start_record += page_size
-            records = content['record']
-            records = [ records ] if not isinstance(records, list) else records
-            doi_docs = []
-            for ridx,record in enumerate(records):
-                valid = bool(record['@status'] == 'Completed' and record['@released'] == 'Y')
-                created_on = datetime.strptime(record['date_first_submitted'], "%Y-%m-%d")
-                updated_on = datetime.strptime(record['date_last_submitted'], "%Y-%m-%d")
-                doc = {
-                    '_id': record['product_nos'], 'doi': record['doi'], 'valid': valid,
-                    'created_on': created_on, 'updated_on': updated_on
-                }
-                doi_docs.append(doc)
-            logger.info(self.doicoll.insert(doi_docs))
-
-    def get_all_dois(self):
-        # NOTE: doi info saved in matcoll as `doi` and `doi_bibtex`
-        dois = {}
-        for doc in self.matcoll.find(
-            {'doi': {'$exists': True}},
-            {'_id': 0, 'task_id': 1, 'doi': 1}
-        ):
-            dois[doc['task_id']] = doc['doi']
-        return dois
-
-    def get_materials_cursor(self, l, n):
-        if l is None:
-            return self.matcoll.find({
-                'doi': {'$exists': False},
-                'task_id': {'$nin': self.doicoll.find().distinct('_id')}
-            }, limit=n)
-        else:
-            mp_ids = [ 'mp-{}'.format(el) for el in l ]
-            return self.matcoll.find({'task_id': {'$in': mp_ids}})
-
-    def get_osti_id(self, mat):
-        # empty osti_id = new submission -> new DOI
-        # check for existing doi to distinguish from edit/update scenario
-        doi_entry = self.doicoll.find_one({'_id': mat['task_id']})
-        return '' if doi_entry is None else doi_entry['doi'].split('/')[-1]
-
-    def insert_dois(self, dois):
-        """save doi info to doicoll, only record update time if exists"""
-        dois_insert = [
-            {'_id': mpid, 'doi': d['doi'], 'valid': False,
-             'created_at': datetime.now().isoformat()}
-            for mpid,d in dois.iteritems() if not d['updated']
-        ]
-        if dois_insert: logger.info(self.doicoll.insert(dois_insert))
-        dois_update = [ mpid for mpid,d in dois.iteritems() if d['updated'] ]
-        if dois_update:
-            logger.info(self.doicoll.update(
-                {'_id': {'$in': dois_update}},
-                {'$set': {'updated_at': datetime.now().isoformat()}},
-                multi=True
-            ))
+logger = logging.getLogger('mpcite.osti_record')
 
 class OstiRecord(object):
     """object defining a MP-specific record for OSTI"""
@@ -120,17 +15,17 @@ class OstiRecord(object):
                  db_yaml='materials_db_dev.yaml'):
         self.endpoint = os.environ['OSTI_ENDPOINT']
         self.bibtex_parser = bibtex.Parser()
-        self.matad = OstiMongoAdapter.from_config(db_yaml=db_yaml) \
+        self.ad = OstiMongoAdapter.from_config(db_yaml=db_yaml) \
             if doicoll is None or matcoll is None else \
             OstiMongoAdapter.from_collections(doicoll, matcoll)
-        self.materials = self.matad.get_materials_cursor(l, n)
+        self.materials = self.ad.get_materials_cursor(l, n)
         research_org = 'Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)'
         self.records = []
         for material in self.materials:
             self.material = material
             # prepare record
             self.records.append(OrderedDict([
-                ('osti_id', self.matad.get_osti_id(material)),
+                ('osti_id', self.ad.get_osti_id(material)),
                 ('dataset_type', 'SM'),
                 ('title', self._get_title()),
                 ('creators', 'Kristin Persson'),
@@ -169,25 +64,14 @@ class OstiRecord(object):
 
     def submit(self):
         """submit generated records to OSTI"""
-        try:
-            r = requests.post(
-              self.endpoint, data=self.records_xml.toxml(),
-              auth=(os.environ['OSTI_USER'], os.environ['OSTI_PASSWORD'])
-            )
-            logger.info(r.content)
-        except:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            logger.warning('%r %r', exc_type, exc_value)
-            return None
-        if r.status_code != 200:
-            logger.warning('Did not request DOIs due to {} error.'.format(r.status_code))
-            return None
-        records = parse(r.content)['records']['record']
-        records = [ records ] if not isinstance(records, list) else records
+        content = self.ad.osti_request(
+            req_type='post', payload=self.records_xml.toxml()
+        )
         dois = {}
-        for ridx,record in enumerate(records):
+        for ridx,record in enumerate(content['records']):
             if record['status'] == 'SUCCESS' or \
                record['status_message'] == 'Duplicate URL Found.;':
+                print record['doi']
                 dois[record['product_nos']] = {
                     'doi': record['doi'],
                     'updated': bool('osti_id' in self.records[ridx])
@@ -196,7 +80,7 @@ class OstiRecord(object):
                 logger.warning('ERROR for %s: %s' % (
                     record['product_nos'], record['status_message']
                 ))
-        self.matad.insert_dois(dois)
+        self.ad.insert_dois(dois)
 
     def _get_title(self):
         formula = self.material['pretty_formula']

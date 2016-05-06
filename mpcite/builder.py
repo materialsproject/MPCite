@@ -1,141 +1,79 @@
 import requests, json, os, datetime, logging
-from matgendb.builders.core import Builder
-from osti_record import OstiRecord
 from bs4 import BeautifulSoup
-import plotly.plotly as py
-from plotly.graph_objs import *
+from adapter import OstiMongoAdapter
 
-now = datetime.datetime.now()
-dirname = os.path.dirname(os.path.realpath(__file__))
-backupfile = os.path.join(dirname, 'dois.json')
-logfile = os.path.join(dirname, 'logs', 'dois_{}.log'.format(now))
-_log = logging.getLogger('mg.build')
-_log.setLevel(logging.INFO)
-fh = logging.FileHandler(logfile)
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter('####### %(asctime)s #######\n%(message)s')
-fh.setFormatter(formatter)
-_log.addHandler(fh)
+logger = logging.getLogger('mpcite.builder')
 
-stream_ids = ['645h22ynck', '96howh4ip8', 'nnqpv5ra02']
-py.sign_in(
-    os.environ.get('MP_PLOTLY_USER'),
-    os.environ.get('MP_PLOTLY_APIKEY'),
-    stream_ids=stream_ids
-)
-
-class DoiBuilder(Builder):
+class DoiBuilder(object):
     """Builder to obtain DOIs for all/new materials"""
+    def __init__(self, doicoll=None, matcoll=None, db_yaml='materials_db_dev.yaml'):
+        self.ad = OstiMongoAdapter.from_config(db_yaml=db_yaml) \
+            if doicoll is None or matcoll is None else \
+            OstiMongoAdapter.from_collections(doicoll, matcoll)
 
-    def get_items(self, nmats=2, dois=None, materials=None):
-        """DOIs + Materials iterator
+    def validate_dois(self):
+        """update doicoll with validated DOIs"""
+        for mpid in self.ad.doicoll.find({'doi': {'$exists': False}}).distinct('_id'):
+            content = osti_request(payload={'site_unique_id': mpid})
+            doi = content['records'][0]['doi']
+            if doi is not None:
+                self.ad.doicoll.update({'_id': mpid}, {'$set': {'doi': doi}})
+                logger.info('DOI {} validated for {}'.format(doi, mpid))
+            else:
+                logger.info('DOI for {} not valid yet'.format(mpid))
 
-        :param nmats: number of materials for which to request DOIs
-        :type nmats: int
-        :param dois: 'dois' collection in 'mg_core_dev/prod'
-        :type dois: QueryEngine
-        :param materials: 'materials' collection in 'mg_core_dev/prod'
-        :type materials: QueryEngine
-        """
-        self.nmats = nmats
-        self.doi_qe = dois
-        self.mat_qe = materials
-        self.headers = {'Accept': 'text/bibliography; style=bibtex'}
-        # loop the mp-id's
-        # w/o valid DOI in doicoll *OR*
-        # w/ valid DOI in doicoll but w/o doi key in matcoll
-        mp_ids = [
-            {'_id': doc['_id'], 'doi': doc['doi'], 'valid': False}
-            for doc in self.doi_qe.collection.find({'valid': False})
-        ]
-        valid_mp_ids = self.doi_qe.collection.find({'valid': True}).distinct('_id')
-        missing_mp_ids = self.mat_qe.collection.find(
-            {'task_id': {'$in': valid_mp_ids}, 'doi': {'$exists': False}},
-            {'_id': 0, 'task_id': 1}
-        ).distinct('task_id')
-        mp_ids += list(self.doi_qe.collection.find(
-            {'_id': {'$in': missing_mp_ids}},
-            {'doi': 1, 'valid': 1, 'bibtex': 1}
-        ))
-        return mp_ids
-
-    def process_item(self, item):
-        """validate DOI, save bibtex and build into matcoll"""
-        if not item['valid']:
-            #doi_url = 'http://doi.org/{}'.format(item['doi'])
-            #doi_url = 'http://dx.doi.org/10.1038/nrd842'
-            #r = requests.get(doi_url, headers=self.headers)
-            if item['doi'] is None:
-                # try loading doi from backup file, a.k.a reset item['doi'] (fixed manually)
-                if os.path.exists(backupfile):
-                    with open(backupfile, 'r') as infile:
-                        data = json.load(infile)
-                        for d in data:
-                            if d['_id'] == item['_id'] and d['doi'] is not None:
-                                item['doi'] = d['doi']
-                                _log.info(self.doi_qe.collection.update(
-                                    {'_id': item['_id']}, {'$set': {'doi': item['doi']}}
-                                ))
-                                break
-                # if mp-id not found in backup (not fixed manually)
-                if item['doi'] is None:
-                    _log.warning('missing DOI for {}. Fix manually in dois.json and rerun!'.format(item['_id']))
-                    return 0
-            osti_id = item['doi'].split('/')[-1]
+    def save_bibtex(self):
+        """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
+        for doc in self.ad.doicoll.find(
+            {'doi': {'$exists': True}, 'bibtex': {'$exists': False}},
+            {'updated_on': 0, 'created_on': 0}
+        ):
+            osti_id = doc['doi'].split('/')[-1]
             doi_url = 'http://www.osti.gov/dataexplorer/biblio/{}/cite/bibtex'.format(osti_id)
             try:
                 r = requests.get(doi_url)
             except Exception as ex:
-                _log.warning('validation exception: {} -> {} -> {}'.format(
-                    item['_id'], item['doi'], ex
+                logger.warning('bibtex for {} ({}) threw exception: {} \n ==> ABORT'.format(
+                    doc['_id'], doc['doi'], ex
                 ))
-                return 0
-            _log.info('validate {} -> {} -> {}'.format(item['_id'], item['doi'], r.status_code))
-            if r.status_code == 200:
-                soup = BeautifulSoup(r.content, "html.parser")
-                rows = soup.find_all('div', attrs={"class" : "csl-entry"})
-                if len(rows) == 1:
-                    bibtex = rows[0].text.strip()
-                    _log.info(self.doi_qe.collection.update(
-                        {'_id': item['_id']}, {'$set': {
-                            'valid': True, 'bibtex': bibtex
-                        }}
-                    ))
-                    # only validated DOIs are ready to be built into matcoll
-                    _log.info(self.mat_qe.collection.update(
-                        {'task_id': item['_id']}, {'$set': {
-                            'doi': item['doi'], 'doi_bibtex': bibtex
-                        }}
-                    ))
-        else:
-            _log.info('re-build {} -> {}'.format(item['_id'], item['doi']))
-            _log.info(self.mat_qe.collection.update(
+                return None
+            if not r.status_code == 200:
+                logger.warning('bibtex request for {} ({}) failed w/ code {} ==> ABORT'.format(
+                    doc['_id'], doc['doi'], r.status_code
+                ))
+                return None
+            soup = BeautifulSoup(r.content, "html.parser")
+            rows = soup.find_all('div', attrs={"class" : "csl-entry"})
+            if len(rows) == 1:
+                bibtex = rows[0].text.strip()
+                self.ad.doicoll.update(
+                    {'_id': doc['_id']}, {'$set': {'bibtex': bibtex}}
+                )
+                logger.info('saved bibtex for {} ({})'.format(doc['_id'], doc['doi']))
+            else:
+                logger.info('invalid response for bibtex request for {} ({})'.format(doc['_id'], doc['doi']))
+
+    def build(self):
+        """build DOIs into matcoll"""
+        # get mp-id's
+        #     - w/ valid doi & bibtex keys in doicoll
+        #     - but w/o doi & doi_bibtex keys in matcoll
+        valid_mp_ids = self.ad.doicoll.find({
+            'doi': {'$exists': True}, 'bibtex': {'$exists': True}
+        }).distinct('_id')
+        missing_mp_ids = self.ad.matcoll.find(
+            {
+                'task_id': {'$in': valid_mp_ids},
+                'doi': {'$exists': False}, 'doi_bibtex': {'$exists': False}
+            },
+            {'_id': 0, 'task_id': 1}
+        ).distinct('task_id')
+        for item in self.ad.doicoll.find(
+            {'_id': {'$in': missing_mp_ids}}, {'doi': 1, 'bibtex': 1}
+        ):
+            self.ad.matcoll.update(
                 {'task_id': item['_id']}, {'$set': {
                     'doi': item['doi'], 'doi_bibtex': item['bibtex']
                 }}
-            ))
-
-    def finalize(self, errors):
-        osti_record = OstiRecord(
-            n=self.nmats,
-            doicoll=self.doi_qe.collection,
-            matcoll=self.mat_qe.collection
-        )
-        osti_record.submit()
-        with open(backupfile, 'w') as outfile:
-            l = list(self.doi_qe.collection.find(
-                fields={'created_at': True, 'doi': True}
-            ))
-            json.dump(l, outfile, indent=2)
-        # push results to plotly streaming graph
-        counts = [
-            self.mat_qe.collection.count(),
-            self.doi_qe.collection.count(),
-            len(osti_record.matad.get_all_dois())
-        ]
-        for idx,stream_id in enumerate(stream_ids):
-            s = py.Stream(stream_id)
-            s.open()
-            s.write(dict(x=now, y=counts[idx]))
-            s.close()
-        return True
+            )
+            logger.info('built {} ({}) into matcoll'.format(item['_id'], item['doi']))

@@ -1,6 +1,6 @@
-import logging
-import argparse
+import logging, argparse
 from osti_record import OstiRecord, OstiMongoAdapter
+from builder import DoiBuilder
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--log", help="show log output", action="store_true")
@@ -19,20 +19,20 @@ group.add_argument("--plotly", action="store_true", help="""init plotly graph"""
 args = parser.parse_args()
 
 loglevel = 'DEBUG' if args.log else 'WARNING'
-logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger('mg.build.osti_doi')
+logging.basicConfig(format='%(asctime)-15s %(message)s', level=logging.ERROR)
+logger = logging.getLogger('mpcite')
 logger.setLevel(getattr(logging, loglevel))
 
 db_yaml = 'materials_db_{}.yaml'.format('prod' if args.prod else 'dev')
-print db_yaml
+logger.info(db_yaml)
 if args.reset or args.info or args.plotly:
-    matad = OstiMongoAdapter.from_config(db_yaml=db_yaml)
+    ad = OstiMongoAdapter.from_config(db_yaml=db_yaml)
     if args.reset:
-        matad._reset()
+        ad._reset()
     elif args.info:
-        print '{} DOIs in DOI collection.'.format(matad.doicoll.count())
-        dois = matad.get_all_dois()
-        print '{}/{} materials have DOIs.'.format(len(dois), matad.matcoll.count())
+        print '{} DOIs in DOI collection.'.format(ad.doicoll.count())
+        dois = ad.get_all_dois()
+        print '{}/{} materials have DOIs.'.format(len(dois), ad.matcoll.count())
     elif args.plotly:
         import os, datetime
         import plotly.plotly as py
@@ -45,8 +45,8 @@ if args.reset or args.info or args.plotly:
         )
         today = datetime.date.today()
         counts = [
-            matad.matcoll.count(), matad.doicoll.count(),
-            len(matad.get_all_dois())
+            ad.matcoll.count(), ad.doicoll.count(),
+            len(ad.get_all_dois())
         ]
         names = ['materials', 'requested DOIs', 'validated DOIs']
         data = Data([
@@ -58,7 +58,23 @@ if args.reset or args.info or args.plotly:
         filename = 'dois_{}'.format(today)
         print py.plot(data, filename=filename, auto_open=False)
 else:
-    # generate records for either n or all (n=0) not-yet-submitted materials 
+    builder = DoiBuilder(db_yaml=db_yaml)
+    builder.validate_dois()
+    builder.save_bibtex()
+    builder.build()
+    # generate records for either n or all (n=0) not-yet-submitted materials
     # OR generate records for specific materials (submitted or not)
     osti = OstiRecord(l=args.l, n=args.n, db_yaml=db_yaml)
     osti.submit()
+    # push results to plotly streaming graph
+    #now = datetime.datetime.now()
+    #counts = [
+    #    self.mat_qe.collection.count(),
+    #    self.doi_qe.collection.count(),
+    #    len(osti_record.ad.get_all_dois())
+    #]
+    #for idx,stream_id in enumerate(stream_ids):
+    #    s = py.Stream(stream_id)
+    #    s.open()
+    #    s.write(dict(x=now, y=counts[idx]))
+    #    s.close()
