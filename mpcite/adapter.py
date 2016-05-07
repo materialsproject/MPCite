@@ -96,17 +96,10 @@ class OstiMongoAdapter(object):
         return dois
 
     def get_materials_cursor(self, l, n):
-        mpids_exclude = [
-            'mp-12661', 'mp-4', 'mp-12661', 'mp-20379', 'mp-188', 'mp-4283',
-            'mp-12662', 'mp-30', 'mp-549970', 'mp-12660', 'mp-22452',
-            'mp-19918', 'mp-22441', 'mp-568345', 'mp-19091', 'mp-569335',
-            'mp-31899', 'mp-12657', 'mp-609151', 'mp-601830', 'mp-694955'
-        ]
         if l is None:
+            existent_mpids = self.doicoll.find().distinct('_id')
             return self.matcoll.find({
-                'doi': {'$exists': False},
-                #'task_id': {'$nin': self.doicoll.find().distinct('_id')}
-                'task_id': {'$nin': mpids_exclude}
+                'doi': {'$exists': False}, 'task_id': {'$nin': existent_mpids}
             }, limit=n)
         else:
             mp_ids = [ 'mp-{}'.format(el) for el in l ]
