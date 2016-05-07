@@ -24,11 +24,7 @@ class OstiMongoAdapter(object):
         client = MongoClient(config['host'], config['port'], j=False)
         db = client[config['db']]
         db.authenticate(config['username'], config['password'])
-        return OstiMongoAdapter(db.dois, db.materials)
-
-    @classmethod
-    def from_collections(cls, doicoll, matcoll):
-        return OstiMongoAdapter(doicoll, matcoll)
+        return OstiMongoAdapter(db.dois, db.materials, db_yaml)
 
     def osti_request(self, req_type='get', payload=None):
         logger.debug('{} request w/ payload {} ...'.format(req_type, payload))

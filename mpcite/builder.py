@@ -6,10 +6,8 @@ logger = logging.getLogger('mpcite')
 
 class DoiBuilder(object):
     """Builder to obtain DOIs for all/new materials"""
-    def __init__(self, doicoll=None, matcoll=None, db_yaml='materials_db_dev.yaml'):
-        self.ad = OstiMongoAdapter.from_config(db_yaml=db_yaml) \
-            if doicoll is None or matcoll is None else \
-            OstiMongoAdapter.from_collections(doicoll, matcoll)
+    def __init__(self, db_yaml='materials_db_dev.yaml'):
+        self.ad = OstiMongoAdapter.from_config(db_yaml=db_yaml)
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
