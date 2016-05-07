@@ -105,24 +105,47 @@ class OstiMongoAdapter(object):
             mp_ids = [ 'mp-{}'.format(el) for el in l ]
             return self.matcoll.find({'task_id': {'$in': mp_ids}})
 
+    def get_doi_from_elink(self, mpid):
+        content = self.osti_request(payload={'site_unique_id': mpid})
+        doi = content['records'][0]['doi']
+        if doi is None:
+            logger.info('DOI for {} not valid yet'.format(mpid))
+        return doi
+
+    def get_duplicate_doi(self, mpid):
+        doi = self.duplicates.get(mpid)
+        if doi is None:
+            logger.error('missing DOI for duplicate {}! DB reset?'.format(mpid))
+            sys.exit(1)
+        logger.info('found DOI {} for {} in dup-file'.format(doi, mpid))
+        return doi
+
     def get_osti_id(self, mat):
         # empty osti_id = new submission -> new DOI
         # check for existing doi to distinguish from edit/update scenario
         doi_entry = self.doicoll.find_one({'_id': mat['task_id']})
+        if 'doi' not in doi_entry:
+            logger.error('not updating {} due to pending DOI'.format(mat['task_id']))
+            return None
         return '' if doi_entry is None else doi_entry['doi'].split('/')[-1]
 
     def insert_dois(self, dois):
         """save doi info to doicoll, only record update time if exists"""
-        dois_insert = [
-            {'_id': mpid, 'doi': d['doi'], 'valid': False,
-             'created_at': datetime.now().isoformat()}
-            for mpid,d in dois.iteritems() if not d['updated']
-        ]
-        if dois_insert: logger.info(self.doicoll.insert(dois_insert))
-        dois_update = [ mpid for mpid,d in dois.iteritems() if d['updated'] ]
+        dois_insert, dois_update = [], []
+        for mpid, doc in dois.iteritems():
+            if doc['updated']:
+                dois_update.append(mpid)
+            else:
+                d = {'_id': mpid, 'created_on': datetime.now().isoformat()}
+                if 'doi' in doc: d['doi'] = doc['doi']
+                dois_insert.append(d)
+        if dois_insert:
+            docs_inserted = self.doicoll.insert(dois_insert)
+            logger.info('{} DOIs inserted'.format(len(docs_inserted)))
         if dois_update:
-            logger.info(self.doicoll.update(
+            ndocs_updated = self.doicoll.update(
                 {'_id': {'$in': dois_update}},
-                {'$set': {'updated_at': datetime.now().isoformat()}},
+                {'$set': {'updated_on': datetime.now().isoformat()}},
                 multi=True
-            ))
+            )['nModified']
+            logger.info('{} DOI docs updated'.format(ndocs_updated))

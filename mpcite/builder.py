@@ -12,13 +12,9 @@ class DoiBuilder(object):
     def validate_dois(self):
         """update doicoll with validated DOIs"""
         for mpid in self.ad.doicoll.find({'doi': {'$exists': False}}).distinct('_id'):
-            content = osti_request(payload={'site_unique_id': mpid})
-            doi = content['records'][0]['doi']
-            if doi is not None:
+            if self.ad.get_doi_from_elink(mpid) is not None:
                 self.ad.doicoll.update({'_id': mpid}, {'$set': {'doi': doi}})
                 logger.info('DOI {} validated for {}'.format(doi, mpid))
-            else:
-                logger.info('DOI for {} not valid yet'.format(mpid))
 
     def save_bibtex(self):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
