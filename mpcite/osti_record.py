@@ -7,7 +7,7 @@ from StringIO import StringIO
 from xmltodict import parse
 from adapter import OstiMongoAdapter
 
-logger = logging.getLogger('mpcite.osti_record')
+logger = logging.getLogger('mpcite')
 
 class OstiRecord(object):
     """object defining a MP-specific record for OSTI"""
@@ -54,16 +54,20 @@ class OstiRecord(object):
             ]))
             if not self.records[-1]['osti_id']:
                 self.records[-1].pop('osti_id', None)
+        if not self.records:
+            logger.info('No materials available for DOI requests')
+            sys.exit(0)
         self.records_xml = parseString(dicttoxml(
             self.records, custom_root='records', attr_type=False
         ))
         items = self.records_xml.getElementsByTagName('item')
         for item in items:
             self.records_xml.renameNode(item, '', item.parentNode.nodeName[:-1])
-        logger.info(self.records_xml.toprettyxml())
+        logger.debug(self.records_xml.toprettyxml())
 
     def submit(self):
         """submit generated records to OSTI"""
+        logger.info('start submission of OSTI records')
         content = self.ad.osti_request(
             req_type='post', payload=self.records_xml.toxml()
         )

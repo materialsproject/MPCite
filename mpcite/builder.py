@@ -2,7 +2,7 @@ import requests, json, os, datetime, logging
 from bs4 import BeautifulSoup
 from adapter import OstiMongoAdapter
 
-logger = logging.getLogger('mpcite.builder')
+logger = logging.getLogger('mpcite')
 
 class DoiBuilder(object):
     """Builder to obtain DOIs for all/new materials"""
@@ -24,24 +24,30 @@ class DoiBuilder(object):
 
     def save_bibtex(self):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
+        num_bibtex_errors = 0
         for doc in self.ad.doicoll.find(
             {'doi': {'$exists': True}, 'bibtex': {'$exists': False}},
             {'updated_on': 0, 'created_on': 0}
         ):
+            if num_bibtex_errors > 2:
+                logger.error('abort bibtex generation (too many request errors)')
+                return None
             osti_id = doc['doi'].split('/')[-1]
             doi_url = 'http://www.osti.gov/dataexplorer/biblio/{}/cite/bibtex'.format(osti_id)
             try:
                 r = requests.get(doi_url)
             except Exception as ex:
-                logger.warning('bibtex for {} ({}) threw exception: {} \n ==> ABORT'.format(
+                logger.error('bibtex for {} ({}) threw exception: {}'.format(
                     doc['_id'], doc['doi'], ex
                 ))
-                return None
+                num_bibtex_errors += 1
+                continue
             if not r.status_code == 200:
-                logger.warning('bibtex request for {} ({}) failed w/ code {} ==> ABORT'.format(
+                logger.error('bibtex request for {} ({}) failed w/ code {}'.format(
                     doc['_id'], doc['doi'], r.status_code
                 ))
-                return None
+                num_bibtex_errors += 1
+                continue
             soup = BeautifulSoup(r.content, "html.parser")
             rows = soup.find_all('div', attrs={"class" : "csl-entry"})
             if len(rows) == 1:

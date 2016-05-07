@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from monty.serialization import loadfn
 from xmltodict import parse
 
-logger = logging.getLogger('mpcite.adapter')
+logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
@@ -25,7 +25,7 @@ class OstiMongoAdapter(object):
         return OstiMongoAdapter(doicoll, matcoll)
 
     def osti_request(self, req_type='get', payload=None):
-        logger.info('{} request w/ payload {} ...'.format(req_type, payload))
+        logger.debug('{} request w/ payload {} ...'.format(req_type, payload))
         auth = (os.environ['OSTI_USER'], os.environ['OSTI_PASSWORD'])
         endpoint = os.environ['OSTI_ENDPOINT']
         if req_type == 'get':
@@ -33,9 +33,11 @@ class OstiMongoAdapter(object):
         elif req_type == 'post':
             r = requests.post(endpoint, auth=auth, data=payload)
         else:
-            raise ValueError('unsupported request type {}'.format(req_type))
+            logger.error('unsupported request type {}'.format(req_type))
+            sys.exit(1)
         if r.status_code != 200:
-            raise ValueError('request failed w/ code {}.'.format(r.status_code))
+            logger.error('request failed w/ code {}'.format(r.status_code))
+            sys.exit(1)
         content = parse(r.content)['records']
         records = content.pop('record')
         content['records'] = records if isinstance(records, list) else [records]
@@ -50,12 +52,14 @@ class OstiMongoAdapter(object):
         if matcoll_clean['ok']:
             logger.info('DOI info cleaned from matcoll')
         else:
-            raise ValueError('DOI cleaning of matcoll failed!')
+            logger.error('DOI cleaning of matcoll failed!')
+            return
         doicoll_remove = self.doicoll.remove()
         if doicoll_remove['ok']:
             logger.info('doi collection removed.')
         else:
-            raise ValueError('DOI collection removal failed!')
+            logger.error('DOI collection removal failed!')
+            return
         start_record, remaining_num_records = 0, sys.maxsize
         while remaining_num_records > 0:
             content = self.osti_request(payload={'start': start_record})
@@ -76,7 +80,8 @@ class OstiMongoAdapter(object):
                 if record['doi'] is not None:
                     doc['doi'] = record['doi']
                 doi_docs.append(doc)
-            logger.info(self.doicoll.insert(doi_docs))
+            docs_inserted = self.doicoll.insert(doi_docs)
+            logger.info('{} DOIs inserted into doicoll'.format(len(docs_inserted)))
 
     def get_all_dois(self):
         # NOTE: doi info saved in matcoll as `doi` and `doi_bibtex`

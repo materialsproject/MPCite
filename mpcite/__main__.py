@@ -18,13 +18,13 @@ group.add_argument("--info", action="store_true", help="""retrieve materials
 group.add_argument("--plotly", action="store_true", help="""init plotly graph""")
 args = parser.parse_args()
 
-loglevel = 'DEBUG' if args.log else 'WARNING'
-logging.basicConfig(format='%(asctime)-15s %(message)s', level=logging.ERROR)
+logging.basicConfig(format='%(asctime)-15s %(levelname)s - %(message)s', level=logging.ERROR)
 logger = logging.getLogger('mpcite')
+loglevel = 'DEBUG' if args.log else 'INFO'
 logger.setLevel(getattr(logging, loglevel))
 
 db_yaml = 'materials_db_{}.yaml'.format('prod' if args.prod else 'dev')
-logger.info(db_yaml)
+logger.debug(db_yaml)
 if args.reset or args.info or args.plotly:
     ad = OstiMongoAdapter.from_config(db_yaml=db_yaml)
     if args.reset:
