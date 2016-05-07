@@ -8,9 +8,15 @@ logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
-    def __init__(self, doicoll, matcoll):
+    def __init__(self, doicoll, matcoll, db_yaml):
         self.matcoll = matcoll
         self.doicoll = doicoll
+        dup_file_suffix = 'prod' if 'dev' not in db_yaml else 'dev'
+        duplicates_file = os.path.join(
+            os.getcwd(), "files", "duplicates_{}.yaml".format(dup_file_suffix)
+        )
+        self.duplicates = loadfn(duplicates_file) \
+                if os.path.exists(duplicates_file) else {}
 
     @classmethod
     def from_config(cls, db_yaml='materials_db_dev.yaml'):
