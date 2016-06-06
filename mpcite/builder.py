@@ -11,10 +11,15 @@ class DoiBuilder(object):
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
-        for mpid in self.ad.doicoll.find({'doi': {'$exists': False}}).distinct('_id'):
-            if self.ad.get_doi_from_elink(mpid) is not None:
-                self.ad.doicoll.update({'_id': mpid}, {'$set': {'doi': doi}})
-                logger.info('DOI {} validated for {}'.format(doi, mpid))
+        mpids = list(self.ad.doicoll.find({'doi': {'$exists': False}}).distinct('_id'))
+        if mpids:
+            for mpid in mpids:
+                doi = self.ad.get_doi_from_elink(mpid)
+                if doi is not None:
+                    self.ad.doicoll.update({'_id': mpid}, {'$set': {'doi': doi}})
+                    logger.info('DOI {} validated for {}'.format(doi, mpid))
+        else:
+            logger.info('No DOIs available for validation.')
 
     def save_bibtex(self):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
