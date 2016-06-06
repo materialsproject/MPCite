@@ -3,7 +3,8 @@
 ```
 Continuous and High-Throughput Allocation of Digital Object Identifiers
 for computed and contributed Materials Data in the Materials Project
-        - Submitted to “Reproducibility" mini-symposium of SciPy16 (http://scipy2016.scipy.org)
+        - Accepted as invited talk at “Reproducibility" mini-symposium of
+          SciPy16 (http://scipy2016.scipy.org/ehome/146062/332963/)
 ```
 
 ## Brief Description
