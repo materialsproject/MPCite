@@ -20,7 +20,7 @@ class OstiRecord(object):
         self.records = []
         for material in materials:
             mpid = material['task_id']
-            osti_id = self.ad.get_osti_id(material)
+            osti_id = self.ad.get_osti_id(mpid)
             if osti_id is None: continue
             # prepare record
             self.records.append(OrderedDict([

@@ -121,12 +121,12 @@ class OstiMongoAdapter(object):
         logger.info('found DOI {} for {} in dup-file'.format(dup['doi'], mpid))
         return dup
 
-    def get_osti_id(self, mat):
+    def get_osti_id(self, mpid):
         # empty osti_id = new submission -> new DOI
         # check for existing doi to distinguish from edit/update scenario
-        doi_entry = self.doicoll.find_one({'_id': mat['task_id']})
-        if 'doi' not in doi_entry:
-            logger.error('not updating {} due to pending DOI'.format(mat['task_id']))
+        doi_entry = self.doicoll.find_one({'_id': mpid})
+        if doi_entry is not None and 'doi' not in doi_entry:
+            logger.error('not updating {} due to pending DOI'.format(mpid))
             return None
         return '' if doi_entry is None else doi_entry['doi'].split('/')[-1]
 
