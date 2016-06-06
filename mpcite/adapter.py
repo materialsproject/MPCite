@@ -28,8 +28,8 @@ class OstiMongoAdapter(object):
 
     def osti_request(self, req_type='get', payload=None):
         logger.debug('{} request w/ payload {} ...'.format(req_type, payload))
-        auth = (os.environ['OSTI_USER'], os.environ['OSTI_PASSWORD'])
-        endpoint = os.environ['OSTI_ENDPOINT']
+        auth = (os.environ['OSTI_ELINK_USER'], os.environ['OSTI_ELINK_PASSWORD'])
+        endpoint = os.environ['OSTI_ELINK_ENDPOINT']
         if req_type == 'get':
             r = requests.get(endpoint, auth=auth, params=payload)
         elif req_type == 'post':

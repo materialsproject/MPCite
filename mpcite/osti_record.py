@@ -12,7 +12,7 @@ logger = logging.getLogger('mpcite')
 class OstiRecord(object):
     """object defining a MP-specific record for OSTI"""
     def __init__(self, l=None, n=0, db_yaml='materials_db_dev.yaml'):
-        self.endpoint = os.environ['OSTI_ENDPOINT']
+        self.endpoint = os.environ['OSTI_ELINK_ENDPOINT']
         self.bibtex_parser = bibtex.Parser()
         self.ad = OstiMongoAdapter.from_config(db_yaml=db_yaml)
         materials = self.ad.get_materials_cursor(l, n)
