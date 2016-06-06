@@ -18,7 +18,7 @@ class DoiBuilder(object):
                     self.ad.doicoll.update({'_id': mpid}, {'$set': {'doi': doi}})
                     logger.info('DOI {} validated for {}'.format(doi, mpid))
         else:
-            logger.info('No DOIs available for validation.')
+            logger.info('no DOIs available for validation')
 
     def save_bibtex(self):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
@@ -67,19 +67,22 @@ class DoiBuilder(object):
         valid_mp_ids = self.ad.doicoll.find({
             'doi': {'$exists': True}, 'bibtex': {'$exists': True}
         }).distinct('_id')
-        missing_mp_ids = self.ad.matcoll.find(
-            {
-                'task_id': {'$in': valid_mp_ids},
-                'doi': {'$exists': False}, 'doi_bibtex': {'$exists': False}
-            },
-            {'_id': 0, 'task_id': 1}
-        ).distinct('task_id')
-        for item in self.ad.doicoll.find(
-            {'_id': {'$in': missing_mp_ids}}, {'doi': 1, 'bibtex': 1}
-        ):
-            self.ad.matcoll.update(
-                {'task_id': item['_id']}, {'$set': {
-                    'doi': item['doi'], 'doi_bibtex': item['bibtex']
-                }}
-            )
-            logger.info('built {} ({}) into matcoll'.format(item['_id'], item['doi']))
+        if valid_mp_ids:
+            missing_mp_ids = self.ad.matcoll.find(
+                {
+                    'task_id': {'$in': valid_mp_ids},
+                    'doi': {'$exists': False}, 'doi_bibtex': {'$exists': False}
+                },
+                {'_id': 0, 'task_id': 1}
+            ).distinct('task_id')
+            for item in self.ad.doicoll.find(
+                {'_id': {'$in': missing_mp_ids}}, {'doi': 1, 'bibtex': 1}
+            ):
+                self.ad.matcoll.update(
+                    {'task_id': item['_id']}, {'$set': {
+                        'doi': item['doi'], 'doi_bibtex': item['bibtex']
+                    }}
+                )
+                logger.info('built {} ({}) into matcoll'.format(item['_id'], item['doi']))
+        else:
+          logger.info('no valid DOIs available for build')
