@@ -80,7 +80,7 @@ class OstiMongoAdapter(object):
                     'created_on': created_on, 'updated_on': updated_on
                 }
                 if record['doi'] is not None:
-                    doc['doi'] = record['doi']
+                    doc['doi'] = record['doi']['#text']
                 doi_docs.append(doc)
             docs_inserted = self.doicoll.insert(doi_docs)
             logger.info('{} DOIs inserted into doicoll'.format(len(docs_inserted)))
