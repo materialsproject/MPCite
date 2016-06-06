@@ -1,5 +1,4 @@
-import requests, json, os, datetime, logging
-from bs4 import BeautifulSoup
+import requests, json, os, datetime, logging, pybtex
 from adapter import OstiMongoAdapter
 
 logger = logging.getLogger('mpcite')
@@ -32,9 +31,11 @@ class DoiBuilder(object):
                 logger.error('abort bibtex generation (too many request errors)')
                 return None
             osti_id = doc['doi'].split('/')[-1]
-            doi_url = 'http://www.osti.gov/dataexplorer/biblio/{}/cite/bibtex'.format(osti_id)
+            auth = (os.environ['OSTI_EXPLORER_USER'], os.environ['OSTI_EXPLORER_PASSWORD'])
+            endpoint = os.environ['OSTI_EXPLORER_ENDPOINT'] + '/{}'.format(osti_id)
+            headers = {'Accept': 'application/x-bibtex'}
             try:
-                r = requests.get(doi_url)
+                r = requests.get(endpoint, auth=auth, headers=headers)
             except Exception as ex:
                 logger.error('bibtex for {} ({}) threw exception: {}'.format(
                     doc['_id'], doc['doi'], ex
@@ -47,16 +48,16 @@ class DoiBuilder(object):
                 ))
                 num_bibtex_errors += 1
                 continue
-            soup = BeautifulSoup(r.content, "html.parser")
-            rows = soup.find_all('div', attrs={"class" : "csl-entry"})
-            if len(rows) == 1:
-                bibtex = rows[0].text.strip()
+            bib_data = pybtex.database.parse_string(r.content, 'bibtex')
+            if len(bib_data.entries) > 0:
                 self.ad.doicoll.update(
-                    {'_id': doc['_id']}, {'$set': {'bibtex': bibtex}}
+                    {'_id': doc['_id']},
+                    {'$set': {'bibtex': bib_data.to_string('bibtex')}}
                 )
                 logger.info('saved bibtex for {} ({})'.format(doc['_id'], doc['doi']))
             else:
-                logger.info('invalid response for bibtex request for {} ({})'.format(doc['_id'], doc['doi']))
+                logger.info('invalid bibtex for {} ({})'.format(doc['_id'], doc['doi']))
+                num_bibtex_errors += 1
 
     def build(self):
         """build DOIs into matcoll"""
