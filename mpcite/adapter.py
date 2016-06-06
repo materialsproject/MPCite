@@ -112,13 +112,14 @@ class OstiMongoAdapter(object):
             logger.info('DOI for {} not valid yet'.format(mpid))
         return doi
 
-    def get_duplicate_doi(self, mpid):
-        doi = self.duplicates.get(mpid)
-        if doi is None:
+    def get_duplicate(self, mpid):
+        dup = self.duplicates.get(mpid)
+        if dup is None:
             logger.error('missing DOI for duplicate {}! DB reset?'.format(mpid))
             sys.exit(1)
-        logger.info('found DOI {} for {} in dup-file'.format(doi, mpid))
-        return doi
+        dup['created_on'] = datetime.combine(dup['created_on'], datetime.min.time())
+        logger.info('found DOI {} for {} in dup-file'.format(dup['doi'], mpid))
+        return dup
 
     def get_osti_id(self, mat):
         # empty osti_id = new submission -> new DOI
@@ -133,12 +134,13 @@ class OstiMongoAdapter(object):
         """save doi info to doicoll, only record update time if exists"""
         dois_insert, dois_update = [], []
         for mpid, doc in dois.iteritems():
-            if doc['updated']:
+            if doc.pop('updated'):
                 dois_update.append(mpid)
             else:
-                d = {'_id': mpid, 'created_on': datetime.now().isoformat()}
-                if 'doi' in doc: d['doi'] = doc['doi']
-                dois_insert.append(d)
+                doc['_id'] = mpid
+                if 'created_on' not in doc:
+                    doc['created_on'] = datetime.now().isoformat()
+                dois_insert.append(doc)
         if dois_insert:
             docs_inserted = self.doicoll.insert(dois_insert)
             logger.info('{} DOIs inserted'.format(len(docs_inserted)))

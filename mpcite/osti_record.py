@@ -81,8 +81,8 @@ class OstiRecord(object):
                 # add DOI from duplicates backup since it should already be in doicoll
                 # a adapter._reset is probably necessary if that's not the case
                 logger.error('{} -> {}'.format(mpid, record['status_message']))
-                doi = self.ad.get_duplicate_doi(mpid)
-                dois[mpid] = {'doi': doi, 'updated': False}
+                dois[mpid] = self.ad.get_duplicate(mpid)
+                dois[mpid]['updated'] = False
             else:
                 logger.error('ERROR for %s: %s' % (mpid, record['status_message']))
         if dois:
