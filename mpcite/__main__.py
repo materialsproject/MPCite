@@ -1,5 +1,6 @@
 import logging, argparse
-from osti_record import OstiRecord, OstiMongoAdapter
+from adapter import OstiMongoAdapter
+from record import OstiRecord
 from builder import DoiBuilder
 
 parser = argparse.ArgumentParser()
