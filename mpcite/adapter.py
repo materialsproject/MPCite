@@ -85,6 +85,24 @@ class OstiMongoAdapter(object):
             docs_inserted = self.doicoll.insert(doi_docs)
             logger.info('{} DOIs inserted into doicoll'.format(len(docs_inserted)))
 
+    def get_traces(self):
+        from plotly.graph_objs import Scatter
+        traces = [
+            Scatter(x=[], y=[], name='requested DOIs'),
+            Scatter(x=[], y=[], name='total requested DOIs')
+        ]
+        num_requested_dois = 0
+        for doc in self.doicoll.aggregate([
+            {'$group': {'_id': '$created_on', 'num': {'$sum': 1}}},
+            {'$sort': {'_id': 1}},
+        ]):
+            num_requested_dois += doc['num']
+            for trace in traces:
+                trace.x.append(doc['_id'].date())
+            traces[0].y.append(doc['num'])
+            traces[1].y.append(num_requested_dois)
+        return traces
+
     def get_all_dois(self):
         # NOTE: doi info saved in matcoll as `doi` and `doi_bibtex`
         dois = {}
