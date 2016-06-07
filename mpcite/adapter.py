@@ -88,8 +88,12 @@ class OstiMongoAdapter(object):
     def get_traces(self):
         from plotly.graph_objs import Scatter
         traces = [
-            Scatter(x=[], y=[], name='requested DOIs'),
-            Scatter(x=[], y=[], name='total requested DOIs')
+            Scatter(x=[], y=[], name='total materials'),
+            Scatter(x=[], y=[], name='total requested DOIs'),
+            Scatter(x=[], y=[], name='total validated DOIs'),
+            Scatter(x=[], y=[], name='new materials'),
+            Scatter(x=[], y=[], name='newly requested DOIs'),
+            Scatter(x=[], y=[], name='newly validated DOIs'),
         ]
         num_requested_dois = 0
         for doc in self.doicoll.aggregate([
@@ -99,8 +103,19 @@ class OstiMongoAdapter(object):
             num_requested_dois += doc['num']
             for trace in traces:
                 trace.x.append(doc['_id'].date())
-            traces[0].y.append(doc['num'])
+            traces[4].y.append(doc['num'])
             traces[1].y.append(num_requested_dois)
+        num_validated_dois = 0
+        for doc in self.doicoll.aggregate([
+            {'$match': {'doi': {'$exists': True}}},
+            {'$group': {'_id': '$created_on', 'num': {'$sum': 1}}},
+            {'$sort': {'_id': 1}},
+        ]):
+            num_validated_dois += doc['num']
+            for trace in traces:
+                trace.x.append(doc['_id'].date())
+            traces[5].y.append(doc['num'])
+            traces[2].y.append(num_validated_dois)
         return traces
 
     def get_all_dois(self):
