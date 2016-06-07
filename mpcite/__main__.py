@@ -34,8 +34,13 @@ elif args.info:
     dois = ad.get_all_dois()
     print '{}/{} materials have DOIs.'.format(len(dois), ad.matcoll.count())
 elif args.graph:
-    import plotly
-    plotly.offline.plot({'data': ad.get_traces()})
+    from plotly.offline import plot
+    from plotly.graph_objs import Layout
+    plot({
+        'data': ad.get_traces(), 'layout': Layout(
+            title='MPCite Monitoring', yaxis=dict(type='log', autorange=True)
+        )
+    })
 else:
     builder = DoiBuilder(db_yaml=db_yaml)
     builder.validate_dois()

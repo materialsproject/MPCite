@@ -1,5 +1,5 @@
 import os, requests, logging, sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 from monty.serialization import loadfn
 from xmltodict import parse
@@ -85,6 +85,12 @@ class OstiMongoAdapter(object):
             docs_inserted = self.doicoll.insert(doi_docs)
             logger.info('{} DOIs inserted into doicoll'.format(len(docs_inserted)))
 
+    def _date_range_group_cond(self, dates):
+        return {'$cond': [
+            {'$lte': ['$date', dates[0] + timedelta(1)]}, dates[0],
+            self._date_range_group_cond(dates[1:])
+        ]} if dates else datetime.now().isoformat()
+
     def get_traces(self):
         from plotly.graph_objs import Scatter
         traces = [
@@ -101,9 +107,10 @@ class OstiMongoAdapter(object):
             {'$sort': {'_id': 1}},
         ]):
             num_requested_dois += doc['num']
-            for trace in traces:
-                trace.x.append(doc['_id'].date())
+            date = doc['_id'].date()
+            traces[4].x.append(date)
             traces[4].y.append(doc['num'])
+            traces[1].x.append(date)
             traces[1].y.append(num_requested_dois)
         num_validated_dois = 0
         for doc in self.doicoll.aggregate([
@@ -112,10 +119,30 @@ class OstiMongoAdapter(object):
             {'$sort': {'_id': 1}},
         ]):
             num_validated_dois += doc['num']
-            for trace in traces:
-                trace.x.append(doc['_id'].date())
+            date = doc['_id'].date()
+            traces[5].x.append(date)
             traces[5].y.append(doc['num'])
+            traces[2].x.append(date)
             traces[2].y.append(num_validated_dois)
+        dates = [datetime.combine(d, datetime.min.time()) for d in traces[1].x]
+        nmats = {
+            doc['_id']: doc['num']
+            for doc in self.matcoll.aggregate([
+                {'$group': {
+                    '_id': self._date_range_group_cond(dates),
+                    'num': {'$sum': 1}
+                }}
+            ])
+        }
+        num_materials = 0
+        for dt in dates:
+            num = nmats[dt] if dt in nmats else 0
+            num_materials += num
+            date = dt.date()
+            traces[3].x.append(date)
+            traces[3].y.append(num)
+            traces[0].x.append(date)
+            traces[0].y.append(num_materials)
         return traces
 
     def get_all_dois(self):
