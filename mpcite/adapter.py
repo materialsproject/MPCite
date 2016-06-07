@@ -162,7 +162,7 @@ class OstiMongoAdapter(object):
                 'doi': {'$exists': False}, 'task_id': {'$nin': existent_mpids}
             }, limit=n)
         else:
-            mp_ids = [ 'mp-{}'.format(el) for el in l ]
+            mp_ids = [el if 'mp' in el else 'mp-'+el for el in l]
             return self.matcoll.find({'task_id': {'$in': mp_ids}})
 
     def get_doi_from_elink(self, mpid):
