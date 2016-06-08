@@ -1,4 +1,4 @@
-import requests, json, os, datetime, logging, pybtex
+import requests, json, os, logging, pybtex
 from adapter import OstiMongoAdapter
 
 logger = logging.getLogger('mpcite')

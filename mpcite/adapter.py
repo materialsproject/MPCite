@@ -24,7 +24,9 @@ class OstiMongoAdapter(object):
         client = MongoClient(config['host'], config['port'], j=False)
         db = client[config['db']]
         db.authenticate(config['username'], config['password'])
-        return OstiMongoAdapter(db.dois, db.materials, db_yaml)
+        ad = OstiMongoAdapter(db.dois, db.materials, db_yaml)
+        logger.info('loaded DB adapter from {} config'.format(db_yaml))
+        return ad
 
     def osti_request(self, req_type='get', payload=None):
         logger.debug('{} request w/ payload {} ...'.format(req_type, payload))
@@ -155,15 +157,18 @@ class OstiMongoAdapter(object):
             dois[doc['task_id']] = doc['doi']
         return dois
 
-    def get_materials_cursor(self, l, n):
-        if l is None:
+    def get_materials_cursor(self, num_or_list):
+        if isinstance(num_or_list, int):
             existent_mpids = self.doicoll.find().distinct('_id')
             return self.matcoll.find({
                 'doi': {'$exists': False}, 'task_id': {'$nin': existent_mpids}
-            }, limit=n)
-        else:
-            mp_ids = [el if 'mp' in el else 'mp-'+el for el in l]
+            }, limit=num_or_list)
+        elif isinstance(num_or_list, list):
+            mp_ids = [el if 'mp' in el else 'mp-'+el for el in num_or_list]
             return self.matcoll.find({'task_id': {'$in': mp_ids}})
+        else:
+          logger.error('cannot get materials cursor from {}'.format(num_or_list))
+          return None
 
     def get_doi_from_elink(self, mpid):
         content = self.osti_request(payload={'site_unique_id': mpid})
