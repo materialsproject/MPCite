@@ -1,4 +1,4 @@
-import requests, json, os, logging, pybtex
+import requests, json, os, logging, pybtex, pymongo
 from adapter import OstiMongoAdapter
 
 logger = logging.getLogger('mpcite')
@@ -10,7 +10,9 @@ class DoiBuilder(object):
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
-        mpids = list(self.ad.doicoll.find({'doi': {'$exists': False}}).distinct('_id'))
+        mpids = list(self.ad.doicoll.find(
+            {'doi': {'$exists': False}}
+        ).sort('updated_on', pymongo.ASCENDING).distinct('_id'))
         if mpids:
             for mpid in mpids:
                 doi = self.ad.get_doi_from_elink(mpid)
@@ -24,9 +26,8 @@ class DoiBuilder(object):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
         num_bibtex_errors = 0
         for doc in self.ad.doicoll.find(
-            {'doi': {'$exists': True}, 'bibtex': {'$exists': False}},
-            {'updated_on': 0, 'created_on': 0}
-        ):
+            {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
+        ).sort('updated_on', pymongo.ASCENDING):
             if num_bibtex_errors > 2:
                 logger.error('abort bibtex generation (too many request errors)')
                 return None
@@ -66,7 +67,7 @@ class DoiBuilder(object):
         #     - but w/o doi & doi_bibtex keys in matcoll
         valid_mp_ids = self.ad.doicoll.find({
             'doi': {'$exists': True}, 'bibtex': {'$exists': True}
-        }).distinct('_id')
+        }).sort('updated_on', pymongo.ASCENDING).distinct('_id')
         if valid_mp_ids:
             missing_mp_ids = self.ad.matcoll.find(
                 {
@@ -77,7 +78,7 @@ class DoiBuilder(object):
             ).distinct('task_id')
             for item in self.ad.doicoll.find(
                 {'_id': {'$in': missing_mp_ids}}, {'doi': 1, 'bibtex': 1}
-            ):
+            ).sort('updated_on', pymongo.ASCENDING):
                 self.ad.matcoll.update(
                     {'task_id': item['_id']}, {'$set': {
                         'doi': item['doi'], 'doi_bibtex': item['bibtex']
