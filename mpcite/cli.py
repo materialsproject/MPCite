@@ -1,4 +1,4 @@
-import logging, argparse, sys
+import logging, argparse, sys, os, yaml
 from plotly.offline import plot
 from plotly.graph_objs import Layout
 from adapter import OstiMongoAdapter
@@ -7,12 +7,28 @@ from builder import DoiBuilder
 
 logging.basicConfig(format='%(asctime)-15s %(levelname)s - %(message)s', level=logging.ERROR)
 logger = logging.getLogger('mpcite')
+oma, bld, rec = None, None, None # OstiMongoAdapter, DoiBuilder, and OstiRecord Instances
+
+class DictAsMember(dict):
+    # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
+    def __getattr__(self, name):
+        value = self[name]
+        if isinstance(value, dict):
+            value = DictAsMember(value)
+        return value
 
 def cli():
-    parser = argparse.ArgumentParser(description="""CLI for MPCite. For help,
-                                     see `mpcite -h` or `mpcite <command> -h`""")
-    parser.add_argument("--log", action="store_true", help="show log output")
-    parser.add_argument("--prod", action="store_true", help="use production DB")
+    global oma, bld, rec
+    parser = argparse.ArgumentParser(
+        description='Command Line Interface for MPCite',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='show verbose log output')
+    mod_dir = os.path.dirname(os.path.abspath(__file__))
+    default_config = os.path.normpath(os.path.join(mod_dir, os.pardir, 'files', 'config.yaml'))
+    parser.add_argument('-c', '--cfg', default=default_config,
+                        help='path to YAML configuration file')
 
     subparsers = parser.add_subparsers()
 
@@ -27,52 +43,42 @@ def cli():
 
     submit_parser = subparsers.add_parser('submit', help='request DOIs')
     submit_parser.add_argument(
-        "num_or_mpids", nargs='+',
-        help="number of materials OR list of mp-id's to submit"
+        'num_or_mpids', nargs='+',
+        help='number of materials OR list of mp-ids to submit'
     )
-    submit_parser.add_argument(
-        "-a", "--auto-accept", action="store_true", help="skip confirmation prompt"
-    )
+    submit_parser.add_argument('-a', '--auto-accept', action='store_true',
+                               help='skip confirmation prompt')
     submit_parser.set_defaults(func=submit)
 
     info_parser = subparsers.add_parser('info', help='show DB status')
     info_parser.set_defaults(func=info)
 
     args = parser.parse_args()
+    logger.setLevel(getattr(logging, 'DEBUG' if args.verbose else 'INFO'))
+    with open(args.cfg, 'r') as f:
+        config = DictAsMember(yaml.load(f))
+    oma = OstiMongoAdapter.from_config(config)
+    bld = DoiBuilder(oma, config.osti.explorer)
+    rec = OstiRecord(oma)
+    logger.info('{} loaded'.format(args.cfg))
     args.func(args)
 
-def set_logger_level(log=False):
-    logger.setLevel(getattr(logging, 'DEBUG' if log else 'INFO'))
-
-def get_config(prod=False):
-    return 'materials_db_{}.yaml'.format('prod' if prod else 'dev')
-
-def get_adapter(prod=False):
-    return OstiMongoAdapter.from_config(db_yaml=get_config(prod=prod))
-
 def reset(args):
-    set_logger_level(log=args.log)
-    ad = get_adapter(prod=args.prod)
-    ad._reset()
+    oma._reset()
 
 def monitor(args):
-    set_logger_level(log=args.log)
-    ad = get_adapter(prod=args.prod)
     plot({
-        'data': ad.get_traces(), 'layout': Layout(
+        'data': oma.get_traces(), 'layout': Layout(
             title='MPCite Monitoring', yaxis=dict(type='log', autorange=True)
         )
     })
 
 def build(args):
-    set_logger_level(log=args.log)
-    builder = DoiBuilder(db_yaml=get_config(prod=args.prod))
-    builder.validate_dois()
-    builder.save_bibtex()
-    builder.build()
+    bld.validate_dois()
+    bld.save_bibtex()
+    bld.build()
 
 def submit(args):
-    set_logger_level(log=args.log)
     num_or_list = args.num_or_mpids
     if len(args.num_or_mpids) == 1:
         try:
@@ -81,19 +87,17 @@ def submit(args):
             pass
     if not args.auto_accept:
         nmats = num_or_list if isinstance(num_or_list, int) else len(num_or_list)
-        answer = raw_input("Submit {} materials to OSTI? [y/N]".format(nmats))
+        answer = raw_input('Submit {} materials to OSTI? [y/N]'.format(nmats))
         if not answer or answer[0].lower() != 'y':
             logger.error('aborting submission ...')
             sys.exit(0)
-    osti = OstiRecord(num_or_list, db_yaml=get_config(prod=args.prod))
-    osti.submit()
+    rec.generate(num_or_list)
+    rec.submit()
 
 def info(args):
-    set_logger_level(log=args.log)
-    ad = get_adapter(prod=args.prod)
-    logger.info('{} DOIs in DOI collection.'.format(ad.doicoll.count()))
+    logger.info('{} DOIs in DOI collection.'.format(oma.doicoll.count()))
     logger.info('{}/{} materials have DOIs.'.format(
-        len(ad.get_all_dois()), ad.matcoll.count()
+        len(oma.get_all_dois()), oma.matcoll.count()
     ))
 
 if __name__ == '__main__':

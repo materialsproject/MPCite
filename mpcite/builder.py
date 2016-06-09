@@ -1,12 +1,13 @@
 import requests, json, os, logging, pybtex, pymongo
-from adapter import OstiMongoAdapter
 
 logger = logging.getLogger('mpcite')
 
 class DoiBuilder(object):
     """Builder to obtain DOIs for all/new materials"""
-    def __init__(self, db_yaml='materials_db_dev.yaml'):
-        self.ad = OstiMongoAdapter.from_config(db_yaml=db_yaml)
+    def __init__(self, adapter, explorer):
+        self.ad = adapter # OstiMongoAdapter
+        self.auth = (explorer.user, explorer.password)
+        self.endpoint = explorer.endpoint
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
@@ -32,11 +33,10 @@ class DoiBuilder(object):
                 logger.error('abort bibtex generation (too many request errors)')
                 return None
             osti_id = doc['doi'].split('/')[-1]
-            auth = (os.environ['OSTI_EXPLORER_USER'], os.environ['OSTI_EXPLORER_PASSWORD'])
-            endpoint = os.environ['OSTI_EXPLORER_ENDPOINT'] + '/{}'.format(osti_id)
+            endpoint = self.endpoint + '/{}'.format(osti_id)
             headers = {'Accept': 'application/x-bibtex'}
             try:
-                r = requests.get(endpoint, auth=auth, headers=headers)
+                r = requests.get(endpoint, auth=self.auth, headers=headers)
             except Exception as ex:
                 logger.error('bibtex for {} ({}) threw exception: {}'.format(
                     doc['_id'], doc['doi'], ex

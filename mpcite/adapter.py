@@ -8,34 +8,32 @@ logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
-    def __init__(self, doicoll, matcoll, db_yaml):
-        self.matcoll = matcoll
-        self.doicoll = doicoll
-        dup_file_suffix = 'prod' if 'dev' not in db_yaml else 'dev'
-        duplicates_file = os.path.join(
-            os.getcwd(), "files", "duplicates_{}.yaml".format(dup_file_suffix)
-        )
-        self.duplicates = loadfn(duplicates_file) \
-                if os.path.exists(duplicates_file) else {}
+    def __init__(self, db, duplicates, elink):
+        self.matcoll = db.materials
+        self.doicoll = db.dois
+        self.duplicates = duplicates
+        self.auth = (elink.user, elink.password)
+        self.endpoint = elink.password
 
     @classmethod
-    def from_config(cls, db_yaml='materials_db_dev.yaml'):
-        config = loadfn(os.path.join(os.environ['DB_LOC'], db_yaml))
-        client = MongoClient(config['host'], config['port'], j=False)
-        db = client[config['db']]
-        db.authenticate(config['username'], config['password'])
-        ad = OstiMongoAdapter(db.dois, db.materials, db_yaml)
-        logger.info('loaded DB adapter from {} config'.format(db_yaml))
-        return ad
+    def from_config(cls, config):
+        db_yaml = os.path.expandvars(config.db_yaml)
+        db_cfg = loadfn(db_yaml)
+        client = MongoClient(db_cfg['host'], db_cfg['port'], j=False)
+        db = client[db_cfg['db']]
+        db.authenticate(db_cfg['username'], db_cfg['password'])
+        logger.info('using DB from {}'.format(db_yaml))
+        duplicates_file = os.path.expandvars(config.duplicates_file)
+        duplicates = loadfn(duplicates_file) \
+                if os.path.exists(duplicates_file) else {}
+        return OstiMongoAdapter(db, duplicates, config.osti.elink)
 
     def osti_request(self, req_type='get', payload=None):
         logger.debug('{} request w/ payload {} ...'.format(req_type, payload))
-        auth = (os.environ['OSTI_ELINK_USER'], os.environ['OSTI_ELINK_PASSWORD'])
-        endpoint = os.environ['OSTI_ELINK_ENDPOINT']
         if req_type == 'get':
-            r = requests.get(endpoint, auth=auth, params=payload)
+            r = requests.get(self.endpoint, auth=self.auth, params=payload)
         elif req_type == 'post':
-            r = requests.post(endpoint, auth=auth, data=payload)
+            r = requests.post(self.endpoint, auth=self.auth, data=payload)
         else:
             logger.error('unsupported request type {}'.format(req_type))
             sys.exit(1)
