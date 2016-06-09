@@ -13,7 +13,7 @@ class OstiMongoAdapter(object):
         self.doicoll = db.dois
         self.duplicates = duplicates
         self.auth = (elink.user, elink.password)
-        self.endpoint = elink.password
+        self.endpoint = elink.endpoint
 
     @classmethod
     def from_config(cls, config):
