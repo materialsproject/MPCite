@@ -36,6 +36,8 @@ def cli():
     reset_parser.set_defaults(func=reset)
 
     monitor_parser = subparsers.add_parser('monitor', help='show graph with stats')
+    monitor_parser.add_argument('-o', '--outfile', default='mpcite.html',
+                                help='path to output html file')
     monitor_parser.set_defaults(func=monitor)
 
     build_parser = subparsers.add_parser('build', help='build DOIs')
@@ -71,7 +73,8 @@ def monitor(args):
         'data': oma.get_traces(), 'layout': Layout(
             title='MPCite Monitoring', yaxis=dict(type='log', autorange=True)
         )
-    })
+    }, show_link=False, auto_open=False, filename=args.outfile)
+    logger.info('plotly page {} generated'.format(args.outfile))
 
 def build(args):
     bld.validate_dois()
