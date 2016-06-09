@@ -156,17 +156,17 @@ class OstiMongoAdapter(object):
         return dois
 
     def get_materials_cursor(self, num_or_list):
-        if isinstance(num_or_list, int):
+        if isinstance(num_or_list, int) and num_or_list > 0:
             existent_mpids = self.doicoll.find().distinct('_id')
             return self.matcoll.find({
                 'doi': {'$exists': False}, 'task_id': {'$nin': existent_mpids}
             }, limit=num_or_list)
-        elif isinstance(num_or_list, list):
+        elif isinstance(num_or_list, list) and len(num_or_list) > 0:
             mp_ids = [el if 'mp' in el else 'mp-'+el for el in num_or_list]
             return self.matcoll.find({'task_id': {'$in': mp_ids}})
         else:
           logger.error('cannot get materials cursor from {}'.format(num_or_list))
-          return None
+          return []
 
     def get_doi_from_elink(self, mpid):
         content = self.osti_request(payload={'site_unique_id': mpid})
