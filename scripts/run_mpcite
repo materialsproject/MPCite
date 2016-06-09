@@ -1,6 +1,20 @@
-source $HOME/.credentials
-source $HOME/.virtualenvs/env_mpcite/bin/activate
-cd $HOME/MPCite
-export PYTHONPATH=`pwd`:$PYTHONPATH
-mgbuild run -v mpcite.builders.DoiBuilder nmats=25 dois=dois.json materials=materials.json
-# TODO retire use of mgbuild, go through mpcite/__main__.py instead
+#!/bin/bash -l
+
+# execute this script in directory intended for log and html files
+# i.e. in crontab: cd <work-dir> && run_mpcite <#materials> 2>&1 >> mpcite.log
+
+if [[ $# -ne 1 || $1 == "-h" ]]; then
+  echo "Usage: `basename $0` num_materials"
+  exit 0
+fi
+
+source `which virtualenvwrapper.sh`
+workon env_mpcite
+command -v mpcite >/dev/null 2>&1 || { echo >&2 "mpcite not installed. Abort."; exit 1; }
+
+mpcite info
+mpcite build
+mpcite submit -a $1
+mpcite monitor # save mpcite.html to current dir
+
+deactivate
