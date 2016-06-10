@@ -13,7 +13,7 @@ class DoiBuilder(object):
         """update doicoll with validated DOIs"""
         mpids = list(self.ad.doicoll.find(
             {'doi': {'$exists': False}}
-        ).sort('updated_on', pymongo.ASCENDING).distinct('_id'))
+        ).sort('updated_on', pymongo.ASCENDING).limit(10).distinct('_id'))
         if mpids:
             for mpid in mpids:
                 doi = self.ad.get_doi_from_elink(mpid)
@@ -28,7 +28,7 @@ class DoiBuilder(object):
         num_bibtex_errors = 0
         for doc in self.ad.doicoll.find(
             {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
-        ).sort('updated_on', pymongo.ASCENDING):
+        ).sort('updated_on', pymongo.ASCENDING).limit(10):
             if num_bibtex_errors > 2:
                 logger.error('abort bibtex generation (too many request errors)')
                 return None
