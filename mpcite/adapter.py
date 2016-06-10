@@ -23,7 +23,7 @@ class OstiMongoAdapter(object):
         client = MongoClient(db_cfg['host'], db_cfg['port'], j=False)
         db = client[db_cfg['db']]
         db.authenticate(db_cfg['username'], db_cfg['password'])
-        logger.info('using DB from {}'.format(db_yaml))
+        logger.debug('using DB from {}'.format(db_yaml))
         duplicates_file = os.path.expandvars(config.duplicates_file)
         duplicates = loadfn(duplicates_file) \
                 if os.path.exists(duplicates_file) else {}

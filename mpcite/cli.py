@@ -62,7 +62,7 @@ def cli():
     oma = OstiMongoAdapter.from_config(config)
     bld = DoiBuilder(oma, config.osti.explorer)
     rec = OstiRecord(oma)
-    logger.info('{} loaded'.format(args.cfg))
+    logger.debug('{} loaded'.format(args.cfg))
     args.func(args)
 
 def reset(args):

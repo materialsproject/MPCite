@@ -12,7 +12,7 @@ source `which virtualenvwrapper.sh`
 workon env_mpcite
 command -v mpcite >/dev/null 2>&1 || { echo >&2 "mpcite not installed. Abort."; exit 1; }
 
-mpcite info
+mpcite -v info
 mpcite build
 mpcite submit -a $1
 mpcite monitor # save mpcite.html to current dir
