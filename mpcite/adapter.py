@@ -82,7 +82,7 @@ class OstiMongoAdapter(object):
                     '_id': record['product_nos'],
                     'created_on': created_on, 'updated_on': updated_on
                 }
-                if record['doi'] is not None:
+                if record['doi']['@status'] == 'COMPLETED':
                     doc['doi'] = record['doi']['#text']
                 doi_docs.append(doc)
             num_records = len(self.doicoll.insert(doi_docs))
@@ -176,9 +176,10 @@ class OstiMongoAdapter(object):
     def get_doi_from_elink(self, mpid):
         content = self.osti_request(payload={'site_unique_id': mpid})
         doi = content['records'][0]['doi']
-        if doi is None:
+        if doi['@status'] != 'COMPLETED':
             logger.info('DOI for {} not valid yet'.format(mpid))
-        return doi
+            return None
+        return doi['#text']
 
     def get_duplicate(self, mpid):
         dup = self.duplicates.get(mpid)
