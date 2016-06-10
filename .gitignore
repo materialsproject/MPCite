@@ -2,4 +2,5 @@ mpcite.egg-info/*
 *.html
 *.pyc
 *.yaml
+*.log
 !files/config-example.yaml
