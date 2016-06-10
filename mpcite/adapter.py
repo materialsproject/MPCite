@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from pymongo import MongoClient
 from monty.serialization import loadfn
 from xmltodict import parse
+from tqdm import *
 
 logger = logging.getLogger('mpcite')
 
@@ -67,7 +68,9 @@ class OstiMongoAdapter(object):
             content = self.osti_request(payload={'start': start_record})
             page_size = int(content['@rows'])
             if start_record == 0:
-                remaining_num_records = int(content['@numfound']) - page_size
+                num_records_total = int(content['@numfound'])
+                pbar = tqdm(total=num_records_total)
+                remaining_num_records = num_records_total - page_size
             else:
                 remaining_num_records -= page_size
             start_record += page_size
@@ -82,8 +85,10 @@ class OstiMongoAdapter(object):
                 if record['doi'] is not None:
                     doc['doi'] = record['doi']['#text']
                 doi_docs.append(doc)
-            docs_inserted = self.doicoll.insert(doi_docs)
-            logger.info('{} DOIs inserted into doicoll'.format(len(docs_inserted)))
+            num_records = len(self.doicoll.insert(doi_docs))
+            pbar.update(num_records)
+        pbar.close()
+        logger.info('all DOIs pulled from E-Link and inserted into doicoll')
 
     def _date_range_group_cond(self, dates):
         return {'$cond': [
