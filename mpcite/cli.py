@@ -102,6 +102,11 @@ def info(args):
     logger.info('{}/{} materials have DOIs.'.format(
         len(oma.get_all_dois()), oma.matcoll.count()
     ))
+    content = oma.osti_request()
+    if '@numfound' in content:
+        logger.info('{} DOIs in E-Link'.format(content['@numfound']))
+    else:
+        logger.error('could not retrieve number of DOIs from E-Link')
 
 if __name__ == '__main__':
     cli()
