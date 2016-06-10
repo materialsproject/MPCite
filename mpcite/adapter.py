@@ -94,7 +94,7 @@ class OstiMongoAdapter(object):
         return {'$cond': [
             {'$lte': ['$date', dates[0] + timedelta(1)]}, dates[0],
             self._date_range_group_cond(dates[1:])
-        ]} if dates else datetime.now().isoformat()
+        ]} if dates else datetime.now()
 
     def get_traces(self):
         from plotly.graph_objs import Scatter
@@ -208,7 +208,7 @@ class OstiMongoAdapter(object):
             else:
                 doc['_id'] = mpid
                 if 'created_on' not in doc:
-                    doc['created_on'] = datetime.now().isoformat()
+                    doc['created_on'] = datetime.now()
                 dois_insert.append(doc)
         if dois_insert:
             docs_inserted = self.doicoll.insert(dois_insert)
@@ -216,7 +216,7 @@ class OstiMongoAdapter(object):
         if dois_update:
             ndocs_updated = self.doicoll.update(
                 {'_id': {'$in': dois_update}},
-                {'$set': {'updated_on': datetime.now().isoformat()}},
+                {'$set': {'updated_on': datetime.now()}},
                 multi=True
             )['nModified']
             logger.info('{} DOI docs updated'.format(ndocs_updated))
