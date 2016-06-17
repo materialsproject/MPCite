@@ -2,7 +2,7 @@
 
 # execute this script in directory intended for log and html files
 # e.g. in crontab
-# */60 * * * * { { cd /global/homes/m/matcomp/mpcite && ./scripts/run_mpcite 0 ; } >> /global/homes/m/matcomp/mpcite/mpcite.log ; } 2>&1 | tee -a /global/homes/m/matcomp/mpcite/mpcite.log
+# 17 * * * * { { cd /home/huck/mpcite && PATH=/usr/local/bin:$PATH:/home/huck/.local/bin ./scripts/run_mpcite 1 && PATH=/usr/local/bin:$PATH rsync -av index.html matgen7:/var/www/mpcite | sed '0,/^$/d' ; } >> /home/huck/mpcite/mpcite.log ; } 2>&1 | tee -a /home/huck/mpcite/mpcite.log
 
 if [[ $# -ne 1 || $1 == "-h" ]]; then
   echo "Usage: `basename $0` num_materials"
@@ -16,6 +16,6 @@ command -v mpcite >/dev/null 2>&1 || { echo >&2 "mpcite not installed. Abort."; 
 mpcite -v info
 mpcite build
 mpcite submit -a $1
-mpcite monitor # save mpcite.html to current dir
+mpcite monitor --div-only -o index.html
 
 deactivate
