@@ -1,4 +1,5 @@
 import requests, json, os, logging, pybtex, pymongo
+from datetime import datetime, timedelta
 
 logger = logging.getLogger('mpcite')
 
@@ -11,9 +12,10 @@ class DoiBuilder(object):
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
-        mpids = list(self.ad.doicoll.find(
-            {'doi': {'$exists': False}}
-        ).sort('updated_on', pymongo.ASCENDING).limit(10).distinct('_id'))
+        mpids = list(self.ad.doicoll.find({
+            'doi': {'$exists': False},
+            'created_on': {'$lte': datetime.now() - timedelta(days=1)}
+        }).sort('updated_on', pymongo.ASCENDING).limit(10).distinct('_id'))
         if mpids:
             for mpid in mpids:
                 doi = self.ad.get_doi_from_elink(mpid)
@@ -26,9 +28,10 @@ class DoiBuilder(object):
     def save_bibtex(self):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
         num_bibtex_errors = 0
-        for doc in self.ad.doicoll.find(
-            {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
-        ).sort('updated_on', pymongo.ASCENDING).limit(10):
+        for doc in self.ad.doicoll.find({
+            'doi': {'$exists': True}, 'bibtex': {'$exists': False},
+            'created_on': {'$lte': datetime.now() - timedelta(days=1)}
+        }).sort('updated_on', pymongo.ASCENDING).limit(10):
             if num_bibtex_errors > 2:
                 logger.error('abort bibtex generation (too many request errors)')
                 return None
