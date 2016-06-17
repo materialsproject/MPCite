@@ -30,7 +30,9 @@ class OstiMongoAdapter(object):
         return OstiMongoAdapter(db, duplicates, config.osti.elink)
 
     def osti_request(self, req_type='get', payload=None):
-        logger.debug('{} request w/ payload {} ...'.format(req_type, payload))
+        logger.debug('{} request to {} w/ payload {} ...'.format(
+            req_type, self.endpoint, payload
+        ))
         if req_type == 'get':
             r = requests.get(self.endpoint, auth=self.auth, params=payload)
         elif req_type == 'post':
