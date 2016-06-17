@@ -9,6 +9,15 @@ logging.basicConfig(format='%(asctime)-15s %(levelname)s - %(message)s', level=l
 logger = logging.getLogger('mpcite')
 oma, bld, rec = None, None, None # OstiMongoAdapter, DoiBuilder, and OstiRecord Instances
 
+mpcite_html = """
+<head>
+  <title>MPCite</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<h1>MPCite Dashboard</h1>
+<a href="http://materialsproject.org:8000/">View Cronjob Log</a>
+"""
+
 class DictAsMember(dict):
     # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
     def __getattr__(self, name):
@@ -38,6 +47,8 @@ def cli():
     monitor_parser = subparsers.add_parser('monitor', help='show graph with stats')
     monitor_parser.add_argument('-o', '--outfile', default='mpcite.html',
                                 help='path to output html file')
+    monitor_parser.add_argument('--div-only', action='store_true',
+                                help='only produce plotly div')
     monitor_parser.set_defaults(func=monitor)
 
     build_parser = subparsers.add_parser('build', help='build DOIs')
@@ -69,11 +80,21 @@ def reset(args):
     oma._reset()
 
 def monitor(args):
-    plot({
-        'data': oma.get_traces(), 'layout': Layout(
-            title='MPCite Monitoring', yaxis=dict(type='log', autorange=True)
-        )
-    }, show_link=False, auto_open=False, filename=args.outfile)
+    fig = dict(data=oma.get_traces(), layout=Layout(
+        title='' if args.div_only else 'MPCite Monitoring',
+        yaxis=dict(type='log', autorange=True),
+        height=700, margin=dict(t=20),
+    ))
+    kwargs = dict(
+        show_link=False, auto_open=False, filename=args.outfile,
+        output_type='div' if args.div_only else 'file',
+        include_plotlyjs=not args.div_only,
+    )
+    div = plot(fig, **kwargs)
+    if args.div_only and div:
+        with open(args.outfile, 'w') as f:
+            f.write(mpcite_html)
+            f.write(div)
     logger.info('plotly page {} generated'.format(args.outfile))
 
 def build(args):
