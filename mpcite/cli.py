@@ -15,7 +15,7 @@ mpcite_html = """
   <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <h1>MPCite Dashboard</h1>
-<a href="http://materialsproject.org:8000/">View Cronjob Log</a>
+<a href="http://materialsproject.org:8000/" target="_blank">View Cronjob Log</a>
 """
 
 class DictAsMember(dict):
