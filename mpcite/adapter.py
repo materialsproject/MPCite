@@ -1,5 +1,5 @@
 import os, requests, logging, sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pymongo import MongoClient
 from monty.serialization import loadfn
 from xmltodict import parse
@@ -208,7 +208,9 @@ class OstiMongoAdapter(object):
             else:
                 doc['_id'] = mpid
                 if 'created_on' not in doc:
-                    doc['created_on'] = datetime.now()
+                    doc['created_on'] = datetime.combine(
+                        date.today(), datetime.min.time()
+                    )
                 dois_insert.append(doc)
         if dois_insert:
             docs_inserted = self.doicoll.insert(dois_insert)
