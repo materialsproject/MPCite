@@ -81,7 +81,6 @@ def reset(args):
 
 def monitor(args):
     fig = dict(data=oma.get_traces(), layout=Layout(
-        title='' if args.div_only else 'MPCite Monitoring',
         yaxis=dict(type='log', autorange=True),
         height=700, margin=dict(t=20),
     ))

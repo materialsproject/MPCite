@@ -104,9 +104,11 @@ class OstiMongoAdapter(object):
             Scatter(x=[], y=[], name='total materials'),
             Scatter(x=[], y=[], name='total requested DOIs'),
             Scatter(x=[], y=[], name='total validated DOIs'),
+            Scatter(x=[], y=[], name='total built DOIs'),
             Scatter(x=[], y=[], name='new materials'),
             Scatter(x=[], y=[], name='newly requested DOIs'),
             Scatter(x=[], y=[], name='newly validated DOIs'),
+            Scatter(x=[], y=[], name='newly built DOIs'),
         ]
         num_requested_dois = 0
         for doc in self.doicoll.aggregate([
@@ -115,8 +117,8 @@ class OstiMongoAdapter(object):
         ]):
             num_requested_dois += doc['num']
             date = doc['_id'].date()
-            traces[4].x.append(date)
-            traces[4].y.append(doc['num'])
+            traces[5].x.append(date)
+            traces[5].y.append(doc['num'])
             traces[1].x.append(date)
             traces[1].y.append(num_requested_dois)
         num_validated_dois = 0
@@ -127,10 +129,22 @@ class OstiMongoAdapter(object):
         ]):
             num_validated_dois += doc['num']
             date = doc['_id'].date()
-            traces[5].x.append(date)
-            traces[5].y.append(doc['num'])
+            traces[6].x.append(date)
+            traces[6].y.append(doc['num'])
             traces[2].x.append(date)
             traces[2].y.append(num_validated_dois)
+        num_built_dois = 0
+        for doc in self.doicoll.aggregate([
+            {'$match': {'doi': {'$exists': True}, 'bibtex': {'$exists': True}}},
+            {'$group': {'_id': '$created_on', 'num': {'$sum': 1}}},
+            {'$sort': {'_id': 1}},
+        ]):
+            num_built_dois += doc['num']
+            date = doc['_id'].date()
+            traces[7].x.append(date)
+            traces[7].y.append(doc['num'])
+            traces[3].x.append(date)
+            traces[3].y.append(num_built_dois)
         dates = [datetime.combine(d, datetime.min.time()) for d in traces[1].x]
         nmats = {
             doc['_id']: doc['num']
@@ -146,8 +160,8 @@ class OstiMongoAdapter(object):
             num = nmats[dt] if dt in nmats else 0
             num_materials += num
             date = dt.date()
-            traces[3].x.append(date)
-            traces[3].y.append(num)
+            traces[4].x.append(date)
+            traces[4].y.append(num)
             traces[0].x.append(date)
             traces[0].y.append(num_materials)
         return traces
