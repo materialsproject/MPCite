@@ -1,4 +1,4 @@
-import requests, json, os, logging, pybtex, pymongo
+import requests, json, os, logging, pybtex, pymongo, time
 from datetime import datetime, timedelta
 
 logger = logging.getLogger('mpcite')
@@ -36,6 +36,7 @@ class DoiBuilder(object):
                 if doi is not None:
                     self.ad.doicoll.update({'_id': mpid}, {'$set': {'doi': doi}})
                     logger.info('DOI {} validated for {}'.format(doi, mpid))
+                time.sleep(.5)
         else:
             logger.info('no DOIs available for validation')
 
@@ -76,6 +77,7 @@ class DoiBuilder(object):
             else:
                 logger.info('invalid bibtex for {} ({})'.format(doc['_id'], doc['doi']))
                 num_bibtex_errors += 1
+            time.sleep(.5)
 
     def build(self):
         """build DOIs into matcoll"""
