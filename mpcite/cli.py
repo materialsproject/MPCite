@@ -52,6 +52,10 @@ def cli():
     monitor_parser.set_defaults(func=monitor)
 
     build_parser = subparsers.add_parser('build', help='build DOIs')
+    build_parser.add_argument(
+        '-n', metavar='NR_REQUESTED_DOIS', dest='nr_req_dois', type=int,
+        default=1, help='number of DOIs requested during submission'
+    )
     build_parser.set_defaults(func=build)
 
     submit_parser = subparsers.add_parser('submit', help='request DOIs')
@@ -97,6 +101,7 @@ def monitor(args):
     logger.info('plotly page {} generated'.format(args.outfile))
 
 def build(args):
+    bld.limit = args.nr_req_dois
     bld.validate_dois()
     bld.save_bibtex()
     bld.build()

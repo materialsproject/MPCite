@@ -5,17 +5,31 @@ logger = logging.getLogger('mpcite')
 
 class DoiBuilder(object):
     """Builder to obtain DOIs for all/new materials"""
-    def __init__(self, adapter, explorer):
+    def __init__(self, adapter, explorer, limit=1):
         self.ad = adapter # OstiMongoAdapter
         self.auth = (explorer.user, explorer.password)
         self.endpoint = explorer.endpoint
+        self.limit = limit
+
+    @property
+    def limit(self):
+        return self.__limit
+
+    @limit.setter
+    def limit(self, nr_requested_dois):
+        if nr_requested_dois > 0:
+            self.__limit = 2 * nr_requested_dois
+        else:
+            logger.error('invalid # of requested DOIs ({})'.format(nr_requested_dois))
+            logger.info('set validation limit to 1')
+            self.__limit = 1
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
         mpids = list(self.ad.doicoll.find({
             'doi': {'$exists': False},
             'created_on': {'$lte': datetime.now() - timedelta(days=1)}
-        }).sort('updated_on', pymongo.ASCENDING).limit(10).distinct('_id'))
+        }).sort('updated_on', pymongo.ASCENDING).limit(self.limit).distinct('_id'))
         if mpids:
             for mpid in mpids:
                 doi = self.ad.get_doi_from_elink(mpid)
@@ -31,7 +45,7 @@ class DoiBuilder(object):
         for doc in self.ad.doicoll.find({
             'doi': {'$exists': True}, 'bibtex': {'$exists': False},
             'created_on': {'$lte': datetime.now() - timedelta(days=1)}
-        }).sort('updated_on', pymongo.ASCENDING).limit(10):
+        }).sort('updated_on', pymongo.ASCENDING).limit(self.limit):
             if num_bibtex_errors > 2:
                 logger.error('abort bibtex generation (too many request errors)')
                 return None
