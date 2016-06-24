@@ -203,6 +203,7 @@ class OstiMongoAdapter(object):
             logger.error('missing DOI for duplicate {}! DB reset?'.format(mpid))
             sys.exit(1)
         dup['created_on'] = datetime.combine(dup['created_on'], datetime.min.time())
+        dup['updated_on'] = dup['created_on']
         logger.info('found DOI {} for {} in dup-file'.format(dup['doi'], mpid))
         return dup
 
@@ -227,6 +228,7 @@ class OstiMongoAdapter(object):
                     doc['created_on'] = datetime.combine(
                         date.today(), datetime.min.time()
                     )
+                    doc['updated_on'] = doc['created_on']
                 dois_insert.append(doc)
         if dois_insert:
             docs_inserted = self.doicoll.insert(dois_insert)
