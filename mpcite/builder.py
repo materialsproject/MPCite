@@ -101,7 +101,7 @@ class DoiBuilder(object):
         #     - but w/o doi & doi_bibtex keys in matcoll
         valid_mp_ids = self.ad.doicoll.find({
             'doi': {'$exists': True}, 'bibtex': {'$exists': True}
-        }).sort('bibtexed_on', pymongo.ASCENDING).distinct('_id')
+        }).distinct('_id')
         if valid_mp_ids:
             missing_mp_ids = self.ad.matcoll.find(
                 {
