@@ -82,6 +82,9 @@ def cli():
 
 def reset(args):
     oma._reset()
+    bld.limit = 100 #oma.doicoll.count()
+    bld.save_bibtex(show_pbar=True)
+    bld.build(show_pbar=True)
 
 def monitor(args):
     fig = dict(data=oma.get_traces(), layout=Layout(
