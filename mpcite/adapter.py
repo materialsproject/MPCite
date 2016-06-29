@@ -85,6 +85,7 @@ class OstiMongoAdapter(object):
                     'created_on': created_on, 'updated_on': updated_on
                 }
                 if record['doi']['@status'] == 'COMPLETED':
+                    doc['validated_on'] = datetime.combine(date.today(), datetime.min.time())
                     doc['doi'] = record['doi']['#text']
                 doi_docs.append(doc)
             num_records = len(self.doicoll.insert(doi_docs))
@@ -124,7 +125,7 @@ class OstiMongoAdapter(object):
         num_validated_dois = 0
         for doc in self.doicoll.aggregate([
             {'$match': {'doi': {'$exists': True}}},
-            {'$group': {'_id': '$created_on', 'num': {'$sum': 1}}},
+            {'$group': {'_id': '$validated_on', 'num': {'$sum': 1}}},
             {'$sort': {'_id': 1}},
         ]):
             num_validated_dois += doc['num']
@@ -135,8 +136,11 @@ class OstiMongoAdapter(object):
             traces[2].y.append(num_validated_dois)
         num_built_dois = 0
         for doc in self.doicoll.aggregate([
-            {'$match': {'doi': {'$exists': True}, 'bibtex': {'$exists': True}}},
-            {'$group': {'_id': '$created_on', 'num': {'$sum': 1}}},
+            {'$match': {
+                'doi': {'$exists': True}, 'bibtex': {'$exists': True},
+                'built_on': {'$exists': True}
+            }},
+            {'$group': {'_id': '$built_on', 'num': {'$sum': 1}}},
             {'$sort': {'_id': 1}},
         ]):
             num_built_dois += doc['num']
