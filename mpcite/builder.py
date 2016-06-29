@@ -1,5 +1,6 @@
 import requests, json, os, logging, pybtex, pymongo, time
 from datetime import datetime, timedelta, date
+from tqdm import *
 
 logger = logging.getLogger('mpcite')
 
@@ -44,9 +45,11 @@ class DoiBuilder(object):
         else:
             logger.info('no DOIs available for validation')
 
-    def save_bibtex(self):
+    def save_bibtex(self, show_pbar=False):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
         num_bibtex_errors = 0
+        if show_pbar:
+            pbar = tqdm(total=self.limit)
         for doc in self.ad.doicoll.find({
             'doi': {'$exists': True}, 'bibtex': {'$exists': False},
         }).sort('validated_on', pymongo.ASCENDING).limit(self.limit):
@@ -79,13 +82,19 @@ class DoiBuilder(object):
                         'bibtexed_on': bibtexed_on
                     }}
                 )
-                logger.info('saved bibtex for {} ({})'.format(doc['_id'], doc['doi']))
+                if not show_pbar:
+                    logger.info('saved bibtex for {} ({})'.format(doc['_id'], doc['doi']))
             else:
                 logger.info('invalid bibtex for {} ({})'.format(doc['_id'], doc['doi']))
                 num_bibtex_errors += 1
+            if show_pbar:
+                pbar.update()
             time.sleep(.5)
+        if show_pbar:
+            pbar.close()
+            logger.info('first {} bibtex strings saved'.format(self.limit))
 
-    def build(self):
+    def build(self, show_pbar=False):
         """build DOIs into matcoll"""
         # get mp-id's
         #     - w/ valid doi & bibtex keys in doicoll
@@ -101,9 +110,12 @@ class DoiBuilder(object):
                 },
                 {'_id': 0, 'task_id': 1}
             ).distinct('task_id')
-            for item in self.ad.doicoll.find(
+            items = self.ad.doicoll.find(
                 {'_id': {'$in': missing_mp_ids}}, {'doi': 1, 'bibtex': 1}
-            ).sort('bibtexed_on', pymongo.ASCENDING):
+            ).sort('bibtexed_on', pymongo.ASCENDING)
+            if show_pbar:
+                pbar = tqdm(total=items.count())
+            for item in items:
                 self.ad.matcoll.update(
                     {'task_id': item['_id']}, {'$set': {
                         'doi': item['doi'], 'doi_bibtex': item['bibtex']
@@ -113,6 +125,12 @@ class DoiBuilder(object):
                 self.ad.doicoll.update(
                     {'_id': item['_id']}, {'$set': {'built_on': built_on}}
                 )
-                logger.info('built {} ({}) into matcoll'.format(item['_id'], item['doi']))
+                if show_pbar:
+                    pbar.update()
+                else:
+                    logger.info('built {} ({}) into matcoll'.format(item['_id'], item['doi']))
+            if show_pbar:
+                pbar.close()
+                logger.info('all available DOIs built into matcoll')
         else:
           logger.info('no valid DOIs available for build')
