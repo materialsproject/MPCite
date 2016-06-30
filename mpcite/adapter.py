@@ -226,6 +226,7 @@ class OstiMongoAdapter(object):
             sys.exit(1)
         dup['created_on'] = datetime.combine(dup['created_on'], datetime.min.time())
         dup['updated_on'] = dup['created_on']
+        dup['validated_on'] = dup['created_on']
         logger.info('found DOI {} for {} in dup-file'.format(dup['doi'], mpid))
         return dup
 
@@ -251,6 +252,8 @@ class OstiMongoAdapter(object):
                         date.today(), datetime.min.time()
                     )
                     doc['updated_on'] = doc['created_on']
+                    if 'doi' in doc:
+                        doc['validated_on'] = doc['created_on']
                 dois_insert.append(doc)
         if dois_insert:
             docs_inserted = self.doicoll.insert(dois_insert)
