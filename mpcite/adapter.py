@@ -48,7 +48,7 @@ class OstiMongoAdapter(object):
         content['records'] = records if isinstance(records, list) else [records]
         return content
 
-    def _reset(self):
+    def _reset(self, rows=None):
         """remove `doi` keys from matcoll, clear and reinit doicoll"""
         matcoll_clean = self.matcoll.update(
             {'doi': {'$exists': True}}, {'$unset': {'doi': 1, 'doi_bibtex': 1}},
@@ -67,7 +67,10 @@ class OstiMongoAdapter(object):
             return
         start_record, remaining_num_records = 0, sys.maxsize
         while remaining_num_records > 0:
-            content = self.osti_request(payload={'start': start_record})
+            payload = {'start': start_record}
+            if rows is not None:
+                payload['rows'] = rows
+            content = self.osti_request(payload=payload)
             page_size = int(content['@rows'])
             if start_record == 0:
                 num_records_total = int(content['@numfound'])

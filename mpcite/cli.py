@@ -42,6 +42,9 @@ def cli():
     subparsers = parser.add_subparsers()
 
     reset_parser = subparsers.add_parser('reset', help='reset collections')
+    reset_parser.add_argument(
+        '--rows', help='number of DOIs (page size) to request at once from E-Link'
+    )
     reset_parser.set_defaults(func=reset)
 
     monitor_parser = subparsers.add_parser('monitor', help='show graph with stats')
@@ -81,7 +84,7 @@ def cli():
     args.func(args)
 
 def reset(args):
-    oma._reset()
+    oma._reset(rows=args.rows)
     bld.limit = 100 #oma.doicoll.count()
     bld.save_bibtex(show_pbar=True)
     bld.build(show_pbar=True)
