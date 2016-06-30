@@ -29,7 +29,7 @@ class DoiBuilder(object):
         """update doicoll with validated DOIs"""
         mpids = list(self.ad.doicoll.find({
             'doi': {'$exists': False},
-            'created_on': {'$lte': datetime.now() - timedelta(days=1)}
+            'created_on': {'$lte': datetime.now() - timedelta(days=2)}
         }).sort('updated_on', pymongo.ASCENDING).limit(self.limit).distinct('_id'))
         if mpids:
             for mpid in mpids:
