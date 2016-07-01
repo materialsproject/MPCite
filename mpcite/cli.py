@@ -1,11 +1,16 @@
-import logging, argparse, sys, os, yaml
+import logging, argparse, sys, os, yaml, logging.handlers
+from datetime import datetime
+from errno import ECONNREFUSED
+from subprocess import Popen, PIPE
+from socket import error as SocketError
 from plotly.offline import plot
 from plotly.graph_objs import Layout
 from adapter import OstiMongoAdapter
 from record import OstiRecord
 from builder import DoiBuilder
 
-logging.basicConfig(format='%(asctime)-15s %(levelname)s - %(message)s', level=logging.ERROR)
+FORMAT = '%(asctime)-15s %(levelname)s - %(message)s'
+logging.basicConfig(format=FORMAT, level=logging.ERROR)
 logger = logging.getLogger('mpcite')
 oma, bld, rec = None, None, None # OstiMongoAdapter, DoiBuilder, and OstiRecord Instances
 
@@ -25,6 +30,41 @@ class DictAsMember(dict):
         if isinstance(value, dict):
             value = DictAsMember(value)
         return value
+
+class BufferingSMTPHandler(logging.handlers.BufferingHandler):
+    # https://gist.github.com/anonymous/1379446
+    def __init__(self, address):
+        logging.handlers.BufferingHandler.__init__(self, 10)
+        self.fromaddr = 'root@localhost'
+        self.toaddrs = [address]
+        self.subject = '[mpcite] ErrorLog {}'.format(datetime.now())
+        self.setFormatter(logging.Formatter(FORMAT))
+
+    def flush(self):
+        if len(self.buffer) > 0:
+            try:
+                msg = "From: {}\r\nTo: {}\r\nSubject: {}\r\n\r\n".format(
+                    self.fromaddr, ','.join(self.toaddrs), self.subject
+                )
+                for record in self.buffer:
+                    s = self.format(record)
+                    msg += "{}\r\n".format(s)
+                if 'ERROR' in msg:
+                    try:
+                        import smtplib
+                        smtp = smtplib.SMTP()
+                        smtp.connect()
+                        smtp.sendmail(self.fromaddr, self.toaddrs, msg)
+                        smtp.quit()
+                    except SocketError as e:
+                        if e.args[0] == ECONNREFUSED:
+                            p = Popen(["/usr/sbin/sendmail", "-t"], stdin=PIPE)
+                            p.communicate(msg)
+                        else:
+                            raise
+            except:
+                self.handleError(None)  # no particular record
+            self.buffer = []
 
 def cli():
     global oma, bld, rec
@@ -77,11 +117,16 @@ def cli():
     logger.setLevel(getattr(logging, 'DEBUG' if args.verbose else 'INFO'))
     with open(args.cfg, 'r') as f:
         config = DictAsMember(yaml.load(f))
+    if config.logging.send_email:
+        addr = config.logging.address
+        logger.addHandler(BufferingSMTPHandler(addr))
+        logger.info('set up logging to send output to {}'.format(addr))
     oma = OstiMongoAdapter.from_config(config)
     bld = DoiBuilder(oma, config.osti.explorer)
     rec = OstiRecord(oma)
     logger.debug('{} loaded'.format(args.cfg))
     args.func(args)
+    logging.shutdown()
 
 def reset(args):
     oma._reset(rows=args.rows)

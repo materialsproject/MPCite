@@ -21,8 +21,10 @@ class DoiBuilder(object):
         if nr_requested_dois > 0:
             self.__limit = 2 * nr_requested_dois
         else:
-            logger.error('invalid # of requested DOIs ({})'.format(nr_requested_dois))
-            logger.info('set validation limit to 1')
+            logger.info(
+                'invalid # of requested DOIs ({}) -> set to 1'.format(
+                    nr_requested_dois
+                ))
             self.__limit = 1
 
     def validate_dois(self):

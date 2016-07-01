@@ -10,3 +10,7 @@ osti:
     endpoint: "https://www.osti.gov/dataexplorer/api/v1/records" # DataCite Explorer API
     user: "" # user name for explorer.endpoint
     password: "" # password for explorer.endpoint
+
+logging:
+  send_email: false
+  address: "" # email address for logging error output
