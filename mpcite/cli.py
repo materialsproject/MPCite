@@ -120,7 +120,7 @@ def cli():
     if config.logging.send_email:
         addr = config.logging.address
         logger.addHandler(BufferingSMTPHandler(addr))
-        logger.info('set up logging to send output to {}'.format(addr))
+        logger.debug('set up logging to send output to {}'.format(addr))
     oma = OstiMongoAdapter.from_config(config)
     bld = DoiBuilder(oma, config.osti.explorer)
     rec = OstiRecord(oma)
