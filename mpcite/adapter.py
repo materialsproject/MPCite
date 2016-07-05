@@ -218,7 +218,7 @@ class OstiMongoAdapter(object):
         content = self.osti_request(payload={'site_unique_id': mpid})
         doi = content['records'][0]['doi']
         if doi['@status'] != 'COMPLETED':
-            logger.info('DOI for {} not valid yet'.format(mpid))
+            logger.error('DOI for {} not valid yet'.format(mpid))
             return None
         return doi['#text']
 
