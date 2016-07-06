@@ -83,6 +83,10 @@ def cli():
 
     reset_parser = subparsers.add_parser('reset', help='reset collections')
     reset_parser.add_argument(
+        '--matcoll', action='store_true',
+        help='remove DOI keys from materials collection'
+    )
+    reset_parser.add_argument(
         '--rows', help='number of DOIs (page size) to request at once from E-Link'
     )
     reset_parser.set_defaults(func=reset)
@@ -129,7 +133,7 @@ def cli():
     logging.shutdown()
 
 def reset(args):
-    oma._reset(rows=args.rows)
+    oma._reset(matcoll=args.matcoll, rows=args.rows)
     bld.limit = 100 #oma.doicoll.count()
     bld.save_bibtex(show_pbar=True)
     bld.build(show_pbar=True)

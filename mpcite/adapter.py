@@ -48,17 +48,18 @@ class OstiMongoAdapter(object):
         content['records'] = records if isinstance(records, list) else [records]
         return content
 
-    def _reset(self, rows=None):
+    def _reset(self, matcoll=False, rows=None):
         """remove `doi` keys from matcoll, clear and reinit doicoll"""
-        matcoll_clean = self.matcoll.update(
-            {'doi': {'$exists': True}}, {'$unset': {'doi': 1, 'doi_bibtex': 1}},
-            multi=True
-        )
-        if matcoll_clean['ok']:
-            logger.info('DOI info cleaned from matcoll')
-        else:
-            logger.error('DOI cleaning of matcoll failed!')
-            return
+        if matcoll:
+            matcoll_clean = self.matcoll.update(
+                {'doi': {'$exists': True}}, {'$unset': {'doi': 1, 'doi_bibtex': 1}},
+                multi=True
+            )
+            if matcoll_clean['ok']:
+                logger.info('DOI info cleaned from matcoll')
+            else:
+                logger.error('DOI cleaning of matcoll failed!')
+                return
         doicoll_remove = self.doicoll.remove()
         if doicoll_remove['ok']:
             logger.info('doi collection removed.')
