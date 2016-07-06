@@ -91,6 +91,9 @@ def cli():
     )
     reset_parser.set_defaults(func=reset)
 
+    sync_parser = subparsers.add_parser('sync', help='sync collections')
+    sync_parser.set_defaults(func=sync)
+
     monitor_parser = subparsers.add_parser('monitor', help='show graph with stats')
     monitor_parser.add_argument('-o', '--outfile', default='mpcite.html',
                                 help='path to output html file')
@@ -129,14 +132,22 @@ def cli():
     bld = DoiBuilder(oma, config.osti.explorer)
     rec = OstiRecord(oma)
     logger.debug('{} loaded'.format(args.cfg))
-    args.func(args)
+    try:
+        args.func(args)
+    except Exception as ex:
+        logger.error(ex)
     logging.shutdown()
 
 def reset(args):
     oma._reset(matcoll=args.matcoll, rows=args.rows)
     bld.limit = 100 #oma.doicoll.count()
-    bld.save_bibtex(show_pbar=True)
-    bld.build(show_pbar=True)
+    bld.show_pbar = True
+    bld.save_bibtex()
+    bld.build()
+
+def sync(args):
+    bld.show_pbar = True
+    bld.sync()
 
 def monitor(args):
     fig = dict(data=oma.get_traces(), layout=Layout(
