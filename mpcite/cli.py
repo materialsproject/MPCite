@@ -178,10 +178,11 @@ def submit(args):
     rec.submit()
 
 def info(args):
-    logger.info('{} DOIs in DOI collection.'.format(oma.doicoll.count()))
-    logger.info('{}/{} materials have DOIs.'.format(
-        len(oma.get_all_dois()), oma.matcoll.count()
-    ))
+    logger.info('{} DOIs in DOI collection'.format(oma.doicoll.count()))
+    dois_ok, dois_not_ok = oma.get_all_dois()
+    logger.info('{}/{} materials have DOIs'.format(len(dois_ok), oma.matcoll.count()))
+    if len(dois_not_ok):
+        logger.error('{} materials are missing bibtex'.format(len(dois_not_ok)))
     content = oma.osti_request()
     if '@numfound' in content:
         logger.info('{} DOIs in E-Link'.format(content['@numfound']))

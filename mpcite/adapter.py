@@ -194,13 +194,16 @@ class OstiMongoAdapter(object):
 
     def get_all_dois(self):
         # NOTE: doi info saved in matcoll as `doi` and `doi_bibtex`
-        dois = {}
+        dois_ok, dois_not_ok = {}, {}
         for doc in self.matcoll.find(
             {'doi': {'$exists': True}},
-            {'_id': 0, 'task_id': 1, 'doi': 1}
+            {'_id': 0, 'task_id': 1, 'doi': 1, 'doi_bibtex': 1}
         ):
-            dois[doc['task_id']] = doc['doi']
-        return dois
+            if 'doi_bibtex' in doc:
+                dois_ok[doc['task_id']] = doc['doi']
+            else:
+                dois_not_ok[doc['task_id']] = doc['doi']
+        return dois_ok, dois_not_ok
 
     def get_materials_cursor(self, num_or_list):
         if isinstance(num_or_list, int) and num_or_list > 0:
