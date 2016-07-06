@@ -179,10 +179,28 @@ def submit(args):
 
 def info(args):
     logger.info('{} DOIs in DOI collection'.format(oma.doicoll.count()))
-    dois_ok, dois_not_ok = oma.get_all_dois()
-    logger.info('{}/{} materials have DOIs'.format(len(dois_ok), oma.matcoll.count()))
-    if len(dois_not_ok):
-        logger.error('{} materials are missing bibtex'.format(len(dois_not_ok)))
+    ndois_missing_built_on, ndois_missing_bibtex = 0, 0
+    mats = oma.matcoll.find(
+        {'doi': {'$exists': True}},
+        {'_id': 0, 'task_id': 1, 'doi': 1, 'doi_bibtex': 1}
+    )
+    logger.info('{}/{} materials have DOIs'.format(mats.count(), oma.matcoll.count()))
+    dois_missing_built_on = [
+        d['_id'] for d in oma.doicoll.find(
+            {'_id': {'$in': mats.distinct('task_id')}}, {'built_on': 1}
+        ) if 'built_on' not in d
+    ]
+    for mat in mats:
+        if 'doi_bibtex' not in mat:
+            ndois_missing_bibtex += 1
+        elif mat['task_id'] in dois_missing_built_on:
+            ndois_missing_built_on += 1
+    if ndois_missing_bibtex > 0:
+        logger.error('{} materials missing bibtex'.format(ndois_missing_bibtex))
+    if ndois_missing_built_on > 0:
+        logger.error('{} DOIs missing built_on'.format(ndois_missing_built_on))
+    if not ndois_missing_built_on and not ndois_missing_bibtex:
+        logger.info('all DOIs and materials OK')
     content = oma.osti_request()
     if '@numfound' in content:
         logger.info('{} DOIs in E-Link'.format(content['@numfound']))
