@@ -8,7 +8,9 @@ class DoiBuilder(object):
     """Builder to obtain DOIs for all/new materials"""
     def __init__(self, adapter, explorer, limit=1):
         self.ad = adapter # OstiMongoAdapter
-        self.auth = (explorer.user, explorer.password)
+        self.auth = None
+        if explorer.user and explorer.password:
+            self.auth = (explorer.user, explorer.password)
         self.endpoint = explorer.endpoint
         self.limit = limit
 
