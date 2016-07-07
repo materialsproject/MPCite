@@ -5,6 +5,7 @@ from xml.dom.minidom import parseString
 from pybtex.database.input import bibtex
 from StringIO import StringIO
 from xmltodict import parse
+from tqdm import *
 
 logger = logging.getLogger('mpcite')
 
@@ -13,13 +14,30 @@ class OstiRecord(object):
     def __init__(self, adapter):
         self.bibtex_parser = bibtex.Parser()
         self.ad = adapter # OstiMongoAdapter
+        self.show_pbar = False
+
+    @property
+    def show_pbar(self):
+        return self.__show_pbar
+
+    @show_pbar.setter
+    def show_pbar(self, flag):
+        if isinstance(flag, bool):
+            self.__show_pbar = flag
+        else:
+            logger.info('invalid show_pbar flag ({}) -> set to False').format(flag)
+            self.__show_pbar = False
 
     def generate(self, num_or_list):
         # generate records for a number of not-yet-submitted materials
         # OR generate records for list of specific materials (submitted or not)
         research_org = 'Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)'
         self.records = []
-        for material in self.ad.get_materials_cursor(num_or_list):
+        cursor = self.ad.get_materials_cursor(num_or_list)
+        nmats = cursor.count()
+        if self.show_pbar:
+            pbar = tqdm(total=nmats)
+        for material in cursor:
             mpid = material['task_id']
             osti_id = self.ad.get_osti_id(mpid)
             if osti_id is None: continue
@@ -54,9 +72,14 @@ class OstiRecord(object):
             ]))
             if not self.records[-1]['osti_id']:
                 self.records[-1].pop('osti_id', None)
+            if self.show_pbar:
+                pbar.update()
+        if self.show_pbar:
+            pbar.close()
         if not self.records:
             logger.info('No materials available for DOI requests')
             sys.exit(0)
+        logger.info('generated {} XML records'.format(nmats))
         self.records_xml = parseString(dicttoxml(
             self.records, custom_root='records', attr_type=False
         ))
@@ -64,10 +87,12 @@ class OstiRecord(object):
         for item in items:
             self.records_xml.renameNode(item, '', item.parentNode.nodeName[:-1])
         logger.debug(self.records_xml.toprettyxml())
+        logger.info('prepared XML string for submission to OSTI')
 
     def submit(self):
         """submit generated records to OSTI"""
-        logger.info('start submission of OSTI records')
+        if not self.show_pbar:
+            logger.info('start submission of OSTI records')
         content = self.ad.osti_request(
             req_type='post', payload=self.records_xml.toxml()
         )
@@ -76,7 +101,8 @@ class OstiRecord(object):
             mpid = record['product_nos']
             updated = bool('osti_id' in self.records[ridx])
             if record['status'] == 'SUCCESS':
-                logger.info('{} -> {}'.format(mpid, record['status']))
+                if not self.show_pbar:
+                    logger.info('{} -> {}'.format(mpid, record['status']))
                 dois[mpid] = {'updated': updated}
             elif record['status_message'] == 'Duplicate URL Found.;':
                 # add DOI from duplicates backup since it should already be in doicoll
