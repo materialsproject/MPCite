@@ -8,6 +8,7 @@ from plotly.graph_objs import Layout
 from adapter import OstiMongoAdapter
 from record import OstiRecord
 from builder import DoiBuilder
+from pyspin.spin import make_spin, Default
 
 FORMAT = '%(asctime)-15s %(levelname)s - %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.ERROR)
@@ -117,6 +118,9 @@ def cli():
                                help='skip confirmation prompt')
     submit_parser.set_defaults(func=submit)
 
+    update_parser = subparsers.add_parser('update', help='update/resubmit all DOIs')
+    update_parser.set_defaults(func=update)
+
     info_parser = subparsers.add_parser('info', help='show DB status')
     info_parser.set_defaults(func=info)
 
@@ -187,6 +191,18 @@ def submit(args):
             sys.exit(0)
     rec.generate(num_or_list)
     rec.submit()
+
+@make_spin(Default, "OSTI request ...")
+def submit_with_spinner():
+    rec.submit()
+
+def update(args):
+    mp_ids = oma.doicoll.find({'doi': {'$exists': True}}).distinct('_id')
+    rec.show_pbar = True
+    chunk_size = 10
+    for i in xrange(0, len(mp_ids), chunk_size):
+        rec.generate(mp_ids[i:i+chunk_size])
+        submit_with_spinner()
 
 def info(args):
     logger.info('{} DOIs in DOI collection'.format(oma.doicoll.count()))
