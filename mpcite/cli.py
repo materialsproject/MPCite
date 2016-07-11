@@ -1,4 +1,4 @@
-import logging, argparse, sys, os, yaml, logging.handlers
+import logging, argparse, sys, os, yaml, logging.handlers, warnings
 from datetime import datetime
 from errno import ECONNREFUSED
 from subprocess import Popen, PIPE
@@ -192,7 +192,7 @@ def submit(args):
     rec.generate(num_or_list)
     rec.submit()
 
-@make_spin(Default, "OSTI request ...")
+@make_spin(Default, "OSTI request ... ")
 def submit_with_spinner():
     rec.submit()
 
@@ -202,7 +202,9 @@ def update(args):
     chunk_size = 10
     for i in xrange(0, len(mp_ids), chunk_size):
         rec.generate(mp_ids[i:i+chunk_size])
-        submit_with_spinner()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            submit_with_spinner()
 
 def info(args):
     logger.info('{} DOIs in DOI collection'.format(oma.doicoll.count()))
