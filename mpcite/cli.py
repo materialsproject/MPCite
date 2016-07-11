@@ -119,6 +119,10 @@ def cli():
     submit_parser.set_defaults(func=submit)
 
     update_parser = subparsers.add_parser('update', help='update/resubmit all DOIs')
+    update_parser.add_argument(
+        '-n', metavar='CHUNK_SIZE', dest='chunk_size', type=int,
+        default=50, help='number of DOIs to update at once'
+    )
     update_parser.set_defaults(func=update)
 
     info_parser = subparsers.add_parser('info', help='show DB status')
@@ -199,9 +203,8 @@ def submit_with_spinner():
 def update(args):
     mp_ids = oma.doicoll.find({'doi': {'$exists': True}}).distinct('_id')
     rec.show_pbar = True
-    chunk_size = 10
-    for i in xrange(0, len(mp_ids), chunk_size):
-        rec.generate(mp_ids[i:i+chunk_size])
+    for i in xrange(0, len(mp_ids), args.chunk_size):
+        rec.generate(mp_ids[i:i+args.chunk_size])
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             submit_with_spinner()
