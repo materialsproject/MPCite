@@ -44,6 +44,11 @@ class DoiBuilder(object):
 
     def validate_dois(self):
         """update doicoll with validated DOIs"""
+        weekday = date.today().weekday()
+        if weekday == 0 or weekday == 6:
+            day = 'Sunday' if weekday else 'Monday'
+            logger.info('no validation on {}'.format(day))
+            return
         mpids = list(self.ad.doicoll.find({
             'doi': {'$exists': False},
             'created_on': {'$lte': datetime.now() - timedelta(days=2)}
