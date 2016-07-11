@@ -34,7 +34,7 @@ class DictAsMember(dict):
 class BufferingSMTPHandler(logging.handlers.BufferingHandler):
     # https://gist.github.com/anonymous/1379446
     def __init__(self, address):
-        logging.handlers.BufferingHandler.__init__(self, 10)
+        logging.handlers.BufferingHandler.__init__(self, 50)
         self.fromaddr = 'root@localhost'
         self.toaddrs = [address]
         self.subject = '[mpcite] ErrorLog {}'.format(datetime.now())
