@@ -17,7 +17,8 @@ setup(
     packages = [package_name],
     install_requires = [
         'dicttoxml', 'latexcodec', 'monty', 'plotly', 'pybtex', 'pymongo',
-        'pytz', 'PyYAML', 'requests', 'six', 'xmltodict', 'tqdm', 'colorlover'
+        'pytz', 'PyYAML', 'requests', 'six', 'xmltodict', 'tqdm', 'colorlover',
+        'pyspin'
     ],
     license = 'MIT',
     keywords = ['materials', 'citation', 'framework', 'digital object identifiers'],
