@@ -34,9 +34,8 @@ class OstiRecord(object):
         research_org = 'Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)'
         self.records = []
         cursor = self.ad.get_materials_cursor(num_or_list)
-        nmats = cursor.count()
         if self.show_pbar:
-            pbar = tqdm(total=nmats)
+            pbar = tqdm(total=cursor.count())
         for material in cursor:
             mpid = material['task_id']
             osti_id = self.ad.get_osti_id(mpid)
@@ -79,7 +78,7 @@ class OstiRecord(object):
         if not self.records:
             logger.info('No materials available for DOI requests')
             sys.exit(0)
-        logger.info('generated {} XML records'.format(nmats))
+        logger.info('generated {} XML records'.format(len(self.records)))
         self.records_xml = parseString(dicttoxml(
             self.records, custom_root='records', attr_type=False
         ))
