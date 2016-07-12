@@ -55,7 +55,7 @@ class DoiBuilder(object):
         }).sort('updated_on', pymongo.ASCENDING).limit(self.limit).distinct('_id'))
         if mpids:
             for mpid in mpids:
-                doi = self.ad.get_doi_from_elink(mpid)
+                doi, status = self.ad.get_doi_from_elink(mpid)
                 if doi is not None:
                     validated_on = datetime.combine(date.today(), datetime.min.time())
                     self.ad.doicoll.update(

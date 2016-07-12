@@ -208,10 +208,15 @@ class OstiMongoAdapter(object):
     def get_doi_from_elink(self, mpid):
         content = self.osti_request(payload={'site_unique_id': mpid})
         doi = content['records'][0]['doi']
-        if doi['@status'] != 'COMPLETED':
+        valid = (
+          doi['@status'] == 'COMPLETED' or (
+            doi['@status'] == 'PENDING' and doi['#text']
+          )
+        )
+        if not valid:
             logger.error('DOI for {} not valid yet'.format(mpid))
-            return None
-        return doi['#text']
+            return None, None
+        return doi['#text'], doi['@status']
 
     def get_duplicate(self, mpid):
         dup = self.duplicates.get(mpid)
