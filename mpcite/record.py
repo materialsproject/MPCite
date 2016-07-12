@@ -122,6 +122,8 @@ class OstiRecord(object):
         content = self.ad.osti_request(
             req_type='post', payload=self.records_xml.toxml()
         )
+        if content is None:
+            return
         dois = {}
         for ridx,record in enumerate(content['records']):
             mpid = record['product_nos']

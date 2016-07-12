@@ -48,7 +48,7 @@ class OstiMongoAdapter(object):
             records = content.pop('record')
         else:
             logger.error('no record found for payload {}'.format(payload))
-            sys.exit(1)
+            return None
         content['records'] = records if isinstance(records, list) else [records]
         return content
 
@@ -212,6 +212,9 @@ class OstiMongoAdapter(object):
     def get_doi_from_elink(self, mpid_or_ostiid):
         key = 'site_unique_id' if 'mp-' in mpid_or_ostiid else 'osti_id'
         content = self.osti_request(payload={key: mpid_or_ostiid})
+        if content is None:
+            logger.error('{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid))
+            return None, None
         doi = content['records'][0]['doi']
         valid = (
           doi['@status'] == 'COMPLETED' or (
@@ -219,7 +222,7 @@ class OstiMongoAdapter(object):
           )
         )
         if not valid:
-            logger.error('DOI for {} not valid yet'.format(mpid))
+            logger.error('DOI for {} not valid yet'.format(mpid_or_ostiid))
             return None, None
         return doi['#text'], doi['@status']
 
