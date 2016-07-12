@@ -15,6 +15,7 @@ class OstiRecord(object):
         self.bibtex_parser = bibtex.Parser()
         self.ad = adapter # OstiMongoAdapter
         self.show_pbar = False
+        self.skip_pending = False
 
     @property
     def show_pbar(self):
@@ -28,6 +29,18 @@ class OstiRecord(object):
             logger.info('invalid show_pbar flag ({}) -> set to False').format(flag)
             self.__show_pbar = False
 
+    @property
+    def skip_pending(self):
+        return self.__skip_pending
+
+    @skip_pending.setter
+    def skip_pending(self, flag):
+        if isinstance(flag, bool):
+            self.__skip_pending = flag
+        else:
+            logger.info('invalid skip_pending flag ({}) -> set to False').format(flag)
+            self.__skip_pending = False
+
     def generate(self, num_or_list):
         # generate records for a number of not-yet-submitted materials
         # OR generate records for list of specific materials (submitted or not)
@@ -39,7 +52,16 @@ class OstiRecord(object):
         for material in cursor:
             mpid = material['task_id']
             osti_id = self.ad.get_osti_id(mpid)
-            if osti_id is None: continue
+            if osti_id is None:
+              if self.show_pbar:
+                pbar.update()
+              continue
+            if osti_id and self.skip_pending:
+                doi, status = self.ad.get_doi_from_elink(mpid)
+                if status == 'PENDING':
+                  if self.show_pbar:
+                    pbar.update()
+                  continue
             # prepare record
             self.records.append(OrderedDict([
                 ('osti_id', osti_id),
