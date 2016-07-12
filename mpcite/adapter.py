@@ -44,7 +44,11 @@ class OstiMongoAdapter(object):
             logger.error('request failed w/ code {}'.format(r.status_code))
             sys.exit(1)
         content = parse(r.content)['records']
-        records = content.pop('record')
+        if 'record' in content:
+            records = content.pop('record')
+        else:
+            logger.error('no record found for payload {}'.format(payload))
+            sys.exit(1)
         content['records'] = records if isinstance(records, list) else [records]
         return content
 
@@ -205,8 +209,9 @@ class OstiMongoAdapter(object):
           logger.error('cannot get materials cursor from {}'.format(num_or_list))
           return []
 
-    def get_doi_from_elink(self, mpid):
-        content = self.osti_request(payload={'site_unique_id': mpid})
+    def get_doi_from_elink(self, mpid_or_ostiid):
+        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid else 'osti_id'
+        content = self.osti_request(payload={key: mpid_or_ostiid})
         doi = content['records'][0]['doi']
         valid = (
           doi['@status'] == 'COMPLETED' or (

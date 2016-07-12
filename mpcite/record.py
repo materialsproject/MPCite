@@ -57,7 +57,7 @@ class OstiRecord(object):
                 pbar.update()
               continue
             if osti_id and self.skip_pending:
-                doi, status = self.ad.get_doi_from_elink(mpid)
+                doi, status = self.ad.get_doi_from_elink(osti_id)
                 if status == 'PENDING':
                   if self.show_pbar:
                     pbar.update()
