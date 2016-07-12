@@ -251,11 +251,11 @@ class OstiMongoAdapter(object):
                 dois_insert.append(doc)
         if dois_insert:
             docs_inserted = self.doicoll.insert(dois_insert)
-            logger.info('{} DOIs inserted'.format(len(docs_inserted)))
+            logger.debug('{} DOIs inserted'.format(len(docs_inserted)))
         if dois_update:
             ndocs_updated = self.doicoll.update(
                 {'_id': {'$in': dois_update}},
                 {'$set': {'updated_on': datetime.now()}},
                 multi=True
             )['nModified']
-            logger.info('{} DOI docs updated'.format(ndocs_updated))
+            logger.debug('{} DOI docs updated'.format(ndocs_updated))

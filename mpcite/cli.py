@@ -1,3 +1,4 @@
+from __future__ import absolute_import, print_function
 import logging, argparse, sys, os, yaml, logging.handlers, warnings
 from datetime import datetime
 from errno import ECONNREFUSED
@@ -5,10 +6,10 @@ from subprocess import Popen, PIPE
 from socket import error as SocketError
 from plotly.offline import plot
 from plotly.graph_objs import Layout
-from adapter import OstiMongoAdapter
-from record import OstiRecord
-from builder import DoiBuilder
-from pyspin.spin import make_spin, Default
+from pyspin import spin
+from mpcite.adapter import OstiMongoAdapter
+from mpcite.record import OstiRecord
+from mpcite.builder import DoiBuilder
 
 FORMAT = '%(asctime)-15s %(levelname)s - %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.ERROR)
@@ -196,9 +197,10 @@ def submit(args):
     rec.generate(num_or_list)
     rec.submit()
 
-@make_spin(Default, "OSTI request ... ")
+@spin.make_spin(spin.Default, 'OSTI submission ... ')
 def submit_with_spinner():
     rec.submit()
+    print('Done', end="")
 
 def update(args):
     mp_ids = oma.doicoll.find({'doi': {'$exists': True}}).distinct('_id')
