@@ -98,9 +98,10 @@ class OstiRecord(object):
         if self.show_pbar:
             pbar.close()
         if not self.records:
-            logger.info('No materials available for DOI requests')
-            sys.exit(0)
-        logger.info('generated {} XML records'.format(len(self.records)))
+            logger.info('No materials available for XML generation')
+            return 0
+        nrecords = len(self.records)
+        logger.info('generated {} XML records'.format(nrecords))
         self.records_xml = parseString(dicttoxml(
             self.records, custom_root='records', attr_type=False
         ))
@@ -109,9 +110,13 @@ class OstiRecord(object):
             self.records_xml.renameNode(item, '', item.parentNode.nodeName[:-1])
         logger.debug(self.records_xml.toprettyxml())
         logger.info('prepared XML string for submission to OSTI')
+        return nrecords
 
     def submit(self):
         """submit generated records to OSTI"""
+        if not self.records:
+            logger.info('No materials available for OSTI submission')
+            return
         if not self.show_pbar:
             logger.info('start submission of OSTI records')
         content = self.ad.osti_request(

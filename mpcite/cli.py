@@ -1,5 +1,5 @@
 from __future__ import absolute_import, print_function
-import logging, argparse, sys, os, yaml, logging.handlers, warnings
+import logging, argparse, os, yaml, logging.handlers, warnings
 from datetime import datetime
 from errno import ECONNREFUSED
 from subprocess import Popen, PIPE
@@ -193,8 +193,9 @@ def submit(args):
         answer = raw_input('Submit {} materials to OSTI? [y/N]'.format(nmats))
         if not answer or answer[0].lower() != 'y':
             logger.error('aborting submission ...')
-            sys.exit(0)
-    rec.generate(num_or_list)
+            return
+    if not rec.generate(num_or_list):
+        return
     rec.submit()
 
 @spin.make_spin(spin.Default, 'OSTI submission ... ')
@@ -204,9 +205,10 @@ def submit_with_spinner():
 
 def update(args):
     mp_ids = oma.doicoll.find({'doi': {'$exists': True}}).distinct('_id')
-    rec.show_pbar = True
+    rec.show_pbar, rec.skip_pending = True, True
     for i in xrange(0, len(mp_ids), args.chunk_size):
-        rec.generate(mp_ids[i:i+args.chunk_size])
+        if not rec.generate(mp_ids[i:i+args.chunk_size]):
+            continue
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", UserWarning)
             submit_with_spinner()
