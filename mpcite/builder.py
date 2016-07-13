@@ -42,17 +42,18 @@ class DoiBuilder(object):
             logger.info('invalid show_pbar flag ({}) -> set to False').format(flag)
             self.__show_pbar = False
 
-    def validate_dois(self):
+    def validate_dois(self, mpids=None):
         """update doicoll with validated DOIs"""
         weekday = date.today().weekday()
         if weekday == 0 or weekday == 6:
             day = 'Sunday' if weekday else 'Monday'
             logger.info('no validation on {}'.format(day))
             return
-        mpids = list(self.ad.doicoll.find({
-            'doi': {'$exists': False},
-            'created_on': {'$lte': datetime.now() - timedelta(days=2)}
-        }).sort('updated_on', pymongo.ASCENDING).limit(self.limit).distinct('_id'))
+        if mpids is None:
+            mpids = list(self.ad.doicoll.find({
+                'doi': {'$exists': False},
+                'created_on': {'$lte': datetime.now() - timedelta(days=2)}
+            }).sort('updated_on', pymongo.ASCENDING).limit(self.limit).distinct('_id'))
         if mpids:
             for mpid in mpids:
                 doi, status = self.ad.get_doi_from_elink(mpid)
@@ -100,12 +101,16 @@ class DoiBuilder(object):
             return False
         return bibtex_string
 
-    def save_bibtex(self):
+    def save_bibtex(self, mpids=None):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
-        docs = self.ad.doicoll.find(
-            {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
-        ).sort('validated_on', pymongo.ASCENDING).limit(self.limit)
-        self.loop_bibtex(docs)
+        query = {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
+        if mpids is not None:
+            query['_id'] = {'$in': mpids}
+        docs = self.ad.doicoll.find(query).sort('validated_on', pymongo.ASCENDING).limit(self.limit)
+        if docs:
+            self.loop_bibtex(docs)
+        else:
+            logger.info('No DOIs available for saving bibtex')
 
     def loop_bibtex(self, docs):
         """save bibtex for a list of doicoll documents"""
@@ -169,14 +174,15 @@ class DoiBuilder(object):
         if not self.show_pbar:
             logger.info('built {} ({}) into matcoll'.format(item['_id'], item['doi']))
 
-    def build(self):
+    def build(self, mpids=None):
         """build DOIs into matcoll"""
         # get mp-id's
         #     - w/ valid doi & bibtex keys in doicoll
         #     - but w/o doi & doi_bibtex keys in matcoll
-        valid_mp_ids = self.ad.doicoll.find({
-            'doi': {'$exists': True}, 'bibtex': {'$exists': True}
-        }).distinct('_id')
+        query = {'doi': {'$exists': True}, 'bibtex': {'$exists': True}}
+        if mpids is not None:
+            query['_id'] = {'$in': mpids}
+        valid_mp_ids = self.ad.doicoll.find(query).distinct('_id')
         if valid_mp_ids:
             missing_mp_ids = self.ad.matcoll.find(
                 {

@@ -108,6 +108,10 @@ def cli():
         '-n', metavar='NR_REQUESTED_DOIS', dest='nr_req_dois', type=int,
         default=1, help='number of DOIs requested during submission'
     )
+    build_parser.add_argument(
+        '--mpids', nargs='+', metavar='ID', dest='mpids',
+        help='list of mp-ids to build'
+    )
     build_parser.set_defaults(func=build)
 
     submit_parser = subparsers.add_parser('submit', help='request DOIs')
@@ -177,9 +181,12 @@ def monitor(args):
 
 def build(args):
     bld.limit = args.nr_req_dois
-    bld.validate_dois()
-    bld.save_bibtex()
-    bld.build()
+    mpids = args.mpids
+    if mpids is not None:
+        mpids = args.mpids if isinstance(args.mpids, list) else [mpids]
+    bld.validate_dois(mpids=mpids)
+    bld.save_bibtex(mpids=mpids)
+    bld.build(mpids=mpids)
 
 def submit(args):
     num_or_list = args.num_or_mpids
