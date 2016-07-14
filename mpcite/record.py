@@ -133,10 +133,21 @@ class OstiRecord(object):
                     logger.info('{} -> {}'.format(mpid, record['status']))
                 dois[mpid] = {'updated': updated}
             elif record['status_message'] == 'Duplicate URL Found.;':
-                # add DOI from duplicates backup since it should already be in doicoll
-                # a adapter._reset is probably necessary if that's not the case
+                # DOI should already be in doicoll!
                 logger.error('{} -> {}'.format(mpid, record['status_message']))
-                dois[mpid] = self.ad.get_duplicate(mpid)
+                if 'test' in self.ad.endpoint:
+                    # DOI probably expired for TEST env:
+                    #     add DOI from duplicates backup
+                    #     adapter._reset is probably necessary if not in duplicates
+                    dois[mpid] = self.ad.get_duplicate(mpid)
+                else:
+                    # for PROD env: query e-link to get DOI and add to doicoll
+                    doi, status = self.ad.get_doi_from_elink(mpid)
+                    if doi is None and status is None:
+                        logger.error('Duplicate {} not in E-Link (why?!)'.format(mpid))
+                        continue
+                    logger.info('Duplicate {} in E-Link: {}'.format(mpid, doi))
+                    dois[mpid] = {'doi': doi}
                 dois[mpid]['updated'] = False
             else:
                 logger.error('ERROR for %s: %s' % (mpid, record['status_message']))
