@@ -53,7 +53,7 @@ class DoiBuilder(object):
             mpids = list(self.ad.doicoll.find({
                 'doi': {'$exists': False},
                 'created_on': {'$lte': datetime.now() - timedelta(days=2)}
-            }).sort('updated_on', pymongo.ASCENDING).limit(self.limit).distinct('_id'))
+            }).sort('updated_on', pymongo.ASCENDING).distinct('_id')[:self.limit])
         if mpids:
             for mpid in mpids:
                 doi, status = self.ad.get_doi_from_elink(mpid)
@@ -106,7 +106,7 @@ class DoiBuilder(object):
         query = {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
         if mpids is not None:
             query['_id'] = {'$in': mpids}
-        docs = self.ad.doicoll.find(query).sort('validated_on', pymongo.ASCENDING).limit(self.limit)
+        docs = self.ad.doicoll.find(query).sort('validated_on', pymongo.ASCENDING)[:self.limit]
         if docs:
             self.loop_bibtex(docs)
         else:
