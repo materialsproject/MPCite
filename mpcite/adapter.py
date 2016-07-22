@@ -200,7 +200,8 @@ class OstiMongoAdapter(object):
         if isinstance(num_or_list, int) and num_or_list > 0:
             existent_mpids = self.doicoll.find().distinct('_id')
             return self.matcoll.find({
-                'doi': {'$exists': False}, 'task_id': {'$nin': existent_mpids}
+                'doi': {'$exists': False}, 'sbxn': 'core',
+                'task_id': {'$nin': existent_mpids}
             }, limit=num_or_list)
         elif isinstance(num_or_list, list) and len(num_or_list) > 0:
             mp_ids = [el if 'mp' in el else 'mp-'+el for el in num_or_list]
