@@ -211,7 +211,8 @@ class OstiMongoAdapter(object):
           return []
 
     def get_doi_from_elink(self, mpid_or_ostiid):
-        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid else 'osti_id'
+        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid \
+                or 'mvc-' in mpid_or_ostiid else 'osti_id'
         content = self.osti_request(payload={key: mpid_or_ostiid})
         if content is None:
             logger.error('{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid))
