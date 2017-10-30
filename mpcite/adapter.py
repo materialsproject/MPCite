@@ -22,7 +22,11 @@ class OstiMongoAdapter(object):
         db_cfg = loadfn(db_yaml)
         client = MongoClient(db_cfg['host'], db_cfg['port'], j=False)
         db = client[db_cfg['db']]
-        db.authenticate(db_cfg['username'], db_cfg['password'])
+        try:
+            db.authenticate(db_cfg['username'], db_cfg['password'])
+        except:
+            logger.error('authentication failed for {}'.format(db_yaml))
+            sys.exit(1)
         logger.debug('using DB from {}'.format(db_yaml))
         duplicates_file = os.path.expandvars(config.duplicates_file)
         duplicates = loadfn(duplicates_file) \
