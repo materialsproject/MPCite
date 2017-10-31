@@ -227,7 +227,9 @@ def info(args):
         {'doi': {'$exists': True}},
         {'_id': 0, 'task_id': 1, 'doi': 1, 'doi_bibtex': 1}
     )
-    logger.info('{}/{} materials have DOIs'.format(mats.count(), oma.matcoll.count()))
+    logger.info('{}/{} materials have DOIs'.format(
+        mats.count(), oma.matcoll.find({'sbxn': 'core'}).count()
+    ))
     dois_missing_built_on = [
         d['_id'] for d in oma.doicoll.find(
             {'_id': {'$in': mats.distinct('task_id')}}, {'built_on': 1}
