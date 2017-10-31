@@ -103,7 +103,10 @@ class DoiBuilder(object):
 
     def save_bibtex(self, mpids=None):
         """save bibtex string in doicoll for all valid DOIs w/o bibtex yet"""
-        query = {'doi': {'$exists': True}, 'bibtex': {'$exists': False}}
+        query = {
+          'doi': {'$exists': True}, 'bibtex': {'$exists': False},
+          'created_on': {'$lte': datetime.now() - timedelta(days=2)}
+        }
         if mpids is not None:
             query['_id'] = {'$in': mpids}
         docs = self.ad.doicoll.find(query).sort('validated_on', pymongo.ASCENDING)[:self.limit]
