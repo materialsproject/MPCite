@@ -10,6 +10,7 @@ logger = logging.getLogger('mpcite')
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
     def __init__(self, db, duplicates, elink):
+        self.db = db
         self.matcoll = db.materials
         self.doicoll = db.dois
         self.duplicates = duplicates
