@@ -34,29 +34,6 @@ class OstiMongoAdapter(object):
                 if os.path.exists(duplicates_file) else {}
         return OstiMongoAdapter(db, duplicates, config.osti.elink)
 
-    def osti_request(self, req_type='get', payload=None):
-        logger.debug('{} request to {} w/ payload {} ...'.format(
-            req_type, self.endpoint, payload
-        ))
-        if req_type == 'get':
-            r = requests.get(self.endpoint, auth=self.auth, params=payload)
-        elif req_type == 'post':
-            r = requests.post(self.endpoint, auth=self.auth, data=payload)
-        else:
-            logger.error('unsupported request type {}'.format(req_type))
-            sys.exit(1)
-        if r.status_code != 200:
-            logger.error('request failed w/ code {}'.format(r.status_code))
-            sys.exit(1)
-        content = parse(r.content)['records']
-        if 'record' in content:
-            records = content.pop('record')
-        else:
-            logger.error('no record found for payload {}'.format(payload))
-            return None
-        content['records'] = records if isinstance(records, list) else [records]
-        return content
-
     def _reset(self, matcoll=False, rows=None):
         """remove `doi` keys from matcoll, clear and reinit doicoll"""
         if matcoll:
@@ -214,24 +191,6 @@ class OstiMongoAdapter(object):
         else:
           logger.error('cannot get materials cursor from {}'.format(num_or_list))
           return []
-
-    def get_doi_from_elink(self, mpid_or_ostiid):
-        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid \
-                or 'mvc-' in mpid_or_ostiid else 'osti_id'
-        content = self.osti_request(payload={key: mpid_or_ostiid})
-        if content is None:
-            logger.error('{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid))
-            return None, None
-        doi = content['records'][0]['doi']
-        valid = (
-          doi['@status'] == 'COMPLETED' or (
-            doi['@status'] == 'PENDING' and doi['#text']
-          )
-        )
-        if not valid:
-            logger.error('DOI for {} not valid yet'.format(mpid_or_ostiid))
-            return None, None
-        return doi['#text'], doi['@status']
 
     def get_duplicate(self, mpid):
         dup = self.duplicates.get(mpid)
