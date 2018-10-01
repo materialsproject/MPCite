@@ -2,6 +2,7 @@ import logging, requests, pybtex, yaml, os
 from datetime import datetime, timedelta, date
 from time import time
 from maggma.builder import Builder
+from emmet.common.copybuilder import CopyBuilder
 
 mod_dir = os.path.dirname(os.path.abspath(__file__))
 default_config = os.path.normpath(os.path.join(mod_dir, os.pardir, 'files', 'config.yaml'))
@@ -174,4 +175,17 @@ class DoiBuilder(Builder):
             return {}
 
 
+
+class DoiCopyBuilder(CopyBuilder):
+
+    def __init__(self, source, target, **kwargs):
+        super().__init__(source=source, target=target, key='_id',
+                         incremental=False, query=None, **kwargs)
+
+    def process_item(self, item):
+        doc = {'task_id': item['_id']}
+        doc['valid'] = 'validated_on' in item
+        for k in ['doi', 'bibtex']:
+          doc[k] = item.get(k)
+        return doc
 
