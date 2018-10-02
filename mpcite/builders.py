@@ -1,6 +1,6 @@
-import logging, requests, pybtex, yaml, os
+import logging, requests, pybtex, yaml, os, time
 from datetime import datetime, timedelta, date
-from time import time
+from xmltodict import parse
 from maggma.builder import Builder
 from emmet.common.copybuilder import CopyBuilder
 
@@ -55,12 +55,11 @@ class DoiBuilder(Builder):
         #    return []
 
         query = {
-            'doi': {'$exists': False},
-            'created_on': {'$lte': datetime.now() - timedelta(days=2)}
+            '$or': [{'valid': False}, {'doi': {'$exists': False}}, {'bibtex': {'$exists': False}}]
         }
         mpids = self.dois.distinct(self.dois.key, query)
         self.total = len(mpids)
-        self.logger.info(self.total)
+        self.logger.info('{} materials to process'.format(self.total))
 
         return self.materials.query(
             criteria={self.materials.key: {'$in': mpids}},
@@ -79,10 +78,18 @@ class DoiBuilder(Builder):
         material_id = item[self.materials.key]
         self.logger.debug("get DOI doc for {}".format(material_id))
         doi_doc = {self.materials.key: material_id}
-        doi_doc.update(self.validate_doi(material_id))
-        if 'doi' in doi_doc and self.num_bibtex_errors < 3:
-            doi_doc.update(self.get_bibtex(doi_doc['doi']))
-            if 'bibtex' not in doi_doc:
+
+        # validate DOI
+        time.sleep(.5)
+        doi, status = self.get_doi_from_elink(material_id)
+        self.logger.debug('{}: {} ({})'.format(material_id, doi, status))
+        doi_doc.update({'doi': doi, 'status': status, 'valid': False})
+        ready = bool(status == 'COMPLETED' or (status == 'PENDING' and doi))
+        if ready and self.num_bibtex_errors < 3:
+            try:
+                doi_doc['bibtex'] = self.get_bibtex(doi)
+                doi_doc['valid'] = True
+            except ValueError:
                 self.num_bibtex_errors += 1
 
         # TODO record generation and submission
@@ -90,10 +97,13 @@ class DoiBuilder(Builder):
         #    return
         #rec.submit()
 
+        self.logger.debug(doi_doc)
         return doi_doc
 
     def update_targets(self, items):
         self.logger.info("No items to update")
+
+    ########### utilities ###################
 
     def osti_request(self, req_type='get', payload=None):
         self.logger.debug('{} request to {} w/ payload {} ...'.format(
@@ -124,29 +134,11 @@ class DoiBuilder(Builder):
                 or 'mvc-' in mpid_or_ostiid else 'osti_id'
         content = self.osti_request(payload={key: mpid_or_ostiid})
         if content is None:
-            self.logger.error('{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid))
-            return None, None
+            msg = '{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid)
+            self.logger.error(msg)
+            raise ValueError(msg)
         doi = content['records'][0]['doi']
-        valid = (
-          doi['@status'] == 'COMPLETED' or (
-            doi['@status'] == 'PENDING' and doi['#text']
-          )
-        )
-        if not valid:
-            self.logger.error('DOI for {} not valid yet'.format(mpid_or_ostiid))
-            return None, None
         return doi['#text'], doi['@status']
-
-
-    def validate_doi(self, material_id):
-        """validate DOI for a single material"""
-        time.sleep(.5)
-        doi, status = self.get_doi_from_elink(material_id)
-        if doi is not None:
-            validated_on = datetime.combine(date.today(), datetime.min.time())
-            self.logger.info('DOI {} validated for {}'.format(doi, material_id))
-            return {'doi': doi, 'validated_on': validated_on}
-        return {}
 
     def get_bibtex(self, doi):
         """get bibtex string for single material/doi"""
@@ -160,32 +152,28 @@ class DoiBuilder(Builder):
         try:
             r = requests.get(endpoint, auth=auth, headers=headers)
         except Exception as ex:
-            self.logger.error('bibtex for {} threw exception: {}'.format(doi, ex))
-            return {}
+            msg = 'bibtex for {} threw exception: {}'.format(doi, ex)
+            self.logger.error(msg)
+            raise ValueError(msg)
         if not r.status_code == 200:
-            self.logger.error('bibtex request for {} failed w/ code {}'.format(doi, r.status_code))
-            return {}
+            msg = 'bibtex request for {} failed w/ code {}'.format(doi, r.status_code)
+            self.logger.error(msg)
+            raise ValueError(msg)
         bib_data = pybtex.database.parse_string(r.content, 'bibtex')
         if len(bib_data.entries) > 0:
-            bibtexed_on = datetime.combine(date.today(), datetime.min.time())
-            bibtex_string = bib_data.to_string('bibtex')
-            return {'bibtex': bibtex_string, 'bibtexed_on': bibtexed_on}
+            return bib_data.to_string('bibtex')
         else:
-            self.logger.info('invalid bibtex for {}'.format(doi))
-            return {}
-
+            msg = 'invalid bibtex for {}'.format(doi)
+            self.logger.error(msg)
+            raise ValueError(msg)
 
 
 class DoiCopyBuilder(CopyBuilder):
 
-    def __init__(self, source, target, **kwargs):
-        super().__init__(source=source, target=target, key='_id',
-                         incremental=False, query=None, **kwargs)
-
     def process_item(self, item):
-        doc = {'task_id': item['_id']}
+        doc = {'_id': item['_id'], 'task_id': item['_id']}
         doc['valid'] = 'validated_on' in item
-        for k in ['doi', 'bibtex']:
+        for k in ['doi', 'bibtex', 'last_updated']:
           doc[k] = item.get(k)
         return doc
 
