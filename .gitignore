@@ -4,3 +4,4 @@ mpcite.egg-info/*
 *.yaml
 *.log
 !files/config-example.yaml
+.idea
