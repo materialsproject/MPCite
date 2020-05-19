@@ -146,13 +146,18 @@ def cli():
     bld = DoiBuilder(oma, config.osti.explorer)
     rec = OstiRecord(oma)
     logger.debug('{} loaded'.format(args.cfg))
-    try:
-        args.func(args)
-    except Exception as ex:
-        logger.error(f"cli.py: args.func(args) failed with error [{ex}]")
+
+
+
+
+    # try:
+    #     args.func(args)
+    # except Exception as ex:
+    #     logger.error(f"cli.py: args.func(args) failed with error [{ex}]")
     logging.shutdown()
 
 def reset(args):
+    logger.debug("Reset Mode Engaged")
     oma._reset(matcoll=args.matcoll, rows=args.rows)
     bld.limit = 100 #oma.doicoll.count()
     bld.show_pbar = True
@@ -160,14 +165,17 @@ def reset(args):
     bld.build()
 
 def sync(args):
+    logger.debug("Sync Mode Engaged")
     bld.show_pbar = True
     bld.sync()
 
 def monitor(args):
+    logger.debug("Monitor Mode Engaged")
     fig = dict(data=oma.get_traces(), layout=Layout(
         yaxis=dict(type='log', autorange=True),
         height=700, margin=dict(t=20),
     ))
+    logger.debug("fig added")
     kwargs = dict(
         show_link=False, auto_open=False, filename=args.outfile,
         output_type='div' if args.div_only else 'file',
@@ -181,6 +189,7 @@ def monitor(args):
     logger.info('plotly page {} generated'.format(args.outfile))
 
 def build(args):
+    logger.debug("Build Mode Engaged")
     bld.limit = args.nr_req_dois
     mpids = args.mpids
     if mpids is not None:
@@ -190,6 +199,7 @@ def build(args):
     bld.build(mpids=mpids)
 
 def submit(args):
+    logger.debug("Submit Mode Engaged")
     num_or_list = args.num_or_mpids
     if len(args.num_or_mpids) == 1:
         try:
@@ -212,6 +222,7 @@ def submit_with_spinner():
     print('Done', end="")
 
 def update(args):
+    logger.debug("Update Mode Engaged")
     mp_ids = oma.doicoll.find({'doi': {'$exists': True}}).distinct('_id')
     rec.show_pbar, rec.skip_pending = True, True
     for i in xrange(0, len(mp_ids), args.chunk_size):
@@ -222,6 +233,7 @@ def update(args):
             submit_with_spinner()
 
 def info(args):
+    logger.debug("Info Mode Engaged")
     logger.info('{} DOIs in DOI collection'.format(oma.doicoll.count()))
     ndois_missing_built_on, ndois_missing_bibtex = 0, 0
     mats = oma.matcoll.find(

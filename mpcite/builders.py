@@ -7,6 +7,7 @@ import sys
 mod_dir = os.path.dirname(os.path.abspath(__file__))
 default_config = os.path.normpath(os.path.join(mod_dir, os.pardir, 'files', 'config.yaml'))
 
+
 class DictAsMember(dict):
     # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
     def __getattr__(self, name):
@@ -14,6 +15,7 @@ class DictAsMember(dict):
         if isinstance(value, dict):
             value = DictAsMember(value)
         return value
+
 
 class DoiBuilder(Builder):
 
@@ -43,13 +45,13 @@ class DoiBuilder(Builder):
             generator of materials to retrieve/build DOI
         """
         self.logger.info("DoiBuilder Started")
-        #self.logger.info("Setting indexes")
-        #self.ensure_indicies()
-        #q = self.materials.lu_filter(self.dois)
-        #updated_mats = set(self.materials.distinct(self.materials.key, q))
+        # self.logger.info("Setting indexes")
+        # self.ensure_indicies()
+        # q = self.materials.lu_filter(self.dois)
+        # updated_mats = set(self.materials.distinct(self.materials.key, q))
 
-        #weekday = date.today().weekday()
-        #if weekday == 0 or weekday == 6:
+        # weekday = date.today().weekday()
+        # if weekday == 0 or weekday == 6:
         #    day = 'Sunday' if weekday else 'Monday'
         #    self.logger.info('no validation on {}'.format(day))
         #    return []
@@ -63,9 +65,8 @@ class DoiBuilder(Builder):
 
         return self.materials.query(
             criteria={self.materials.key: {'$in': mpids}},
-            properties=[self.materials.key]#, "structure", self.materials.lu_field],
+            properties=[self.materials.key]  # , "structure", self.materials.lu_field],
         )
-
 
     def process_item(self, item):
         """
@@ -93,9 +94,9 @@ class DoiBuilder(Builder):
                 self.num_bibtex_errors += 1
 
         # TODO record generation and submission
-        #if not rec.generate(num_or_list):
+        # if not rec.generate(num_or_list):
         #    return
-        #rec.submit()
+        # rec.submit()
 
         self.logger.debug(doi_doc)
         return doi_doc
@@ -131,7 +132,7 @@ class DoiBuilder(Builder):
 
     def get_doi_from_elink(self, mpid_or_ostiid):
         key = 'site_unique_id' if 'mp-' in mpid_or_ostiid \
-                or 'mvc-' in mpid_or_ostiid else 'osti_id'
+                                  or 'mvc-' in mpid_or_ostiid else 'osti_id'
         content = self.osti_request(payload={key: mpid_or_ostiid})
         if content is None:
             msg = '{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid)
@@ -167,7 +168,6 @@ class DoiBuilder(Builder):
             self.logger.error(msg)
             raise ValueError(msg)
 
-
 # class DoiCopyBuilder(CopyBuilder):
 #
 #     def process_item(self, item):
@@ -176,4 +176,3 @@ class DoiBuilder(Builder):
 #         for k in ['doi', 'bibtex', 'last_updated']:
 #           doc[k] = item.get(k)
 #         return doc
-

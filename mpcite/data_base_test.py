@@ -13,5 +13,30 @@ client.set_alias(alias="mg_core_prod", actual="mg_core_prod", which="db")
 mp_core_db: Database = client.db("ro:knowhere/mp_core")
 robocrys_db: Database = client.db("ro:prod/mg_core_prod")
 
-cursor = mp_core_db.get_collection('dois_next_gen').find({})
-print(cursor.count())
+"""
+dumps dois to file
+"""
+local_file = "../files/dois2.json"
+def dump_dois_to_file(local_file="../files/dois2.json"):
+    cursor = mp_core_db.get_collection('dois_next_gen').find({},{"_id": 0,
+                                                                 "_bt": 0,
+                                                                 "last_updated": 0}).limit(100)
+    from bson.json_util import dumps
+    import json
+    with open(local_file, 'w') as outfile:
+        json.dump(json.loads(dumps(cursor)), outfile, indent=2)
+# dump_dois_to_file()
+
+"""
+load to local mongo database, NOTE that this will clear ALL data before adding it back in
+"""
+from pymongo import MongoClient
+import json
+local_client = MongoClient("mongodb://localhost:27017/")
+local_mp_core_db = local_client["mp_core"]
+local_dois_coll = local_mp_core_db["dois"]
+local_dois_coll.delete_many({})
+with open(local_file) as f:
+    file_data = json.load(f)
+local_dois_coll.insert_many(file_data)
+print(f"local doi collection now has {local_dois_coll.count_documents(filter={})} documents")
