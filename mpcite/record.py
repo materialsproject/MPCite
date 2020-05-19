@@ -1,9 +1,10 @@
 import os, logging, sys
 from collections import OrderedDict
 from dicttoxml import dicttoxml
+
 from xml.dom.minidom import parseString
 from pybtex.database.input import bibtex
-from StringIO import StringIO
+from io import StringIO
 from xmltodict import parse
 from tqdm import *
 

@@ -1,8 +1,8 @@
 import logging, requests, pybtex, yaml, os, time
 from datetime import datetime, timedelta, date
 from xmltodict import parse
-from maggma.builder import Builder
-from emmet.common.copybuilder import CopyBuilder
+from maggma.core.builder import Builder
+import sys
 
 mod_dir = os.path.dirname(os.path.abspath(__file__))
 default_config = os.path.normpath(os.path.join(mod_dir, os.pardir, 'files', 'config.yaml'))
@@ -29,7 +29,7 @@ class DoiBuilder(Builder):
         self.num_bibtex_errors = 0
 
         with open(default_config, 'r') as f:
-            config = DictAsMember(yaml.load(f))
+            config = DictAsMember(yaml.load(f, Loader=yaml.SafeLoader))
 
         self.elink = config.osti.elink
         self.explorer = config.osti.explorer
@@ -168,12 +168,12 @@ class DoiBuilder(Builder):
             raise ValueError(msg)
 
 
-class DoiCopyBuilder(CopyBuilder):
-
-    def process_item(self, item):
-        doc = {'_id': item['_id'], 'task_id': item['_id']}
-        doc['valid'] = 'validated_on' in item
-        for k in ['doi', 'bibtex', 'last_updated']:
-          doc[k] = item.get(k)
-        return doc
+# class DoiCopyBuilder(CopyBuilder):
+#
+#     def process_item(self, item):
+#         doc = {'_id': item['_id'], 'task_id': item['_id']}
+#         doc['valid'] = 'validated_on' in item
+#         for k in ['doi', 'bibtex', 'last_updated']:
+#           doc[k] = item.get(k)
+#         return doc
 

@@ -1,6 +1,8 @@
 import os, requests, logging, sys
 from datetime import date, datetime, timedelta
 from pymongo import MongoClient
+from pymongo.database import Database
+from pymongo.collection import Collection
 from monty.serialization import loadfn
 from xmltodict import parse
 from tqdm import *
@@ -9,26 +11,24 @@ logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
-    def __init__(self, db, duplicates, elink):
-        self.db = db
-        self.matcoll = db.materials
-        self.doicoll = db.dois
+    def __init__(self, db: Database, duplicates, elink):
+        self.db: Database = db
+        self.matcoll:Collection = db.materials
+        self.doicoll:Collection = db.dois
         self.duplicates = duplicates
         self.auth = (elink.user, elink.password)
         self.endpoint = elink.endpoint
 
     @classmethod
     def from_config(cls, config):
-        db_yaml = os.path.expandvars(config.db_yaml)
-        db_cfg = loadfn(db_yaml)
-        client = MongoClient(db_cfg['host'], db_cfg['port'], j=False)
-        db = client[db_cfg['db']]
+        client = MongoClient(config["material"]['host'], config["material"]['port'], j=False)
+        db = client[config["material"]['db']]
         try:
-            db.authenticate(db_cfg['username'], db_cfg['password'])
+            db.authenticate(config["material"]['username'], config["material"]['password'])
         except:
-            logger.error('authentication failed for {}'.format(db_yaml))
+            logger.error('authentication failed for {}'.format("materials"))
             sys.exit(1)
-        logger.debug('using DB from {}'.format(db_yaml))
+        logger.debug('using DB from {}'.format("materials"))
         duplicates_file = os.path.expandvars(config.duplicates_file)
         duplicates = loadfn(duplicates_file) \
                 if os.path.exists(duplicates_file) else {}

@@ -7,11 +7,12 @@ from socket import error as SocketError
 from plotly.offline import plot
 from plotly.graph_objs import Layout
 from pyspin import spin
-from mpcite.adapter import OstiMongoAdapter
-from mpcite.record import OstiRecord
-from mpcite.builder import DoiBuilder
+from adapter import OstiMongoAdapter
+from record import OstiRecord
+from builders import DoiBuilder
+from pathlib import Path
 
-FORMAT = '%(asctime)-15s %(levelname)s - %(message)s'
+FORMAT = '[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s'
 logging.basicConfig(format=FORMAT, level=logging.ERROR)
 logger = logging.getLogger('mpcite')
 oma, bld, rec = None, None, None # OstiMongoAdapter, DoiBuilder, and OstiRecord Instances
@@ -76,9 +77,10 @@ def cli():
     )
     parser.add_argument('-v', '--verbose', action='store_true',
                         help='show verbose log output')
-    mod_dir = os.path.dirname(os.path.abspath(__file__))
-    default_config = os.path.normpath(os.path.join(mod_dir, os.pardir, 'files', 'config.yaml'))
-    parser.add_argument('-c', '--cfg', default=default_config,
+    mod_dir: Path = Path(os.path.abspath(__file__)).parent.parent
+    default_config = mod_dir / "files" / "config.yaml"
+
+    parser.add_argument('-c', '--cfg', default=default_config.as_posix(),
                         help='path to YAML configuration file')
 
     subparsers = parser.add_subparsers()
@@ -129,18 +131,17 @@ def cli():
         default=50, help='number of DOIs to update at once'
     )
     update_parser.set_defaults(func=update)
-
     info_parser = subparsers.add_parser('info', help='show DB status')
     info_parser.set_defaults(func=info)
-
     args = parser.parse_args()
     logger.setLevel(getattr(logging, 'DEBUG' if args.verbose else 'INFO'))
     with open(args.cfg, 'r') as f:
-        config = DictAsMember(yaml.load(f))
+        config = DictAsMember(yaml.load(f, Loader=yaml.SafeLoader))
     if config.logging.send_email:
         addr = config.logging.address
         logger.addHandler(BufferingSMTPHandler(addr))
         logger.debug('set up logging to send output to {}'.format(addr))
+
     oma = OstiMongoAdapter.from_config(config)
     bld = DoiBuilder(oma, config.osti.explorer)
     rec = OstiRecord(oma)
@@ -148,7 +149,7 @@ def cli():
     try:
         args.func(args)
     except Exception as ex:
-        logger.error(ex)
+        logger.error(f"cli.py: args.func(args) failed with error [{ex}]")
     logging.shutdown()
 
 def reset(args):
