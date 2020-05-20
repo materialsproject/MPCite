@@ -24,7 +24,11 @@ def dump_dois_to_file(local_file="../files/dois2.json"):
     from bson.json_util import dumps
     import json
     with open(local_file, 'w') as outfile:
-        json.dump(json.loads(dumps(cursor)), outfile, indent=2)
+        jsons = json.loads(dumps(cursor))
+        for j in jsons:
+            j["valid"] = True
+            j["_status"] = "COMPLETED"
+        json.dump(jsons, outfile, indent=2)
 # dump_dois_to_file()
 
 """

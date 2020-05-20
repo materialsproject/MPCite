@@ -14,13 +14,19 @@ logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
-    def __init__(self, materials_store: Store, dois_store: Store, robocrys_store: Store, duplicates, elink):
+    def __init__(self, materials_store: Store, dois_store: Store, robocrys_store: Store, duplicates):
+        """
+
+        :param materials_store: represent a connection to the materials store
+        :param dois_store: represent a connection to the dois store
+        :param robocrys_store: represent a connection to the robocrys store
+        :param duplicates: idk yet
+        :param elink: lol, idk yet
+        """
         self.materials_store: Store = materials_store
         self.doi_store: Store = dois_store
         self.robocrys_store: Store = robocrys_store
         self.duplicates = duplicates
-        self.auth = (elink.user, elink.password)
-        self.endpoint = elink.endpoint
 
     @classmethod
     def from_config(cls, config):
@@ -45,11 +51,17 @@ class OstiMongoAdapter(object):
         return OstiMongoAdapter(materials_store=materials_store,
                                 dois_store=dois_store,
                                 robocrys_store=robocrys_store,
-                                duplicates=duplicates,
-                                elink=config.osti.elink)
+                                duplicates=duplicates)
 
     @classmethod
-    def _create_mongostore(cls, config, config_collection_name: str):
+    def _create_mongostore(cls, config, config_collection_name: str) -> MongoStore:
+        """
+        Helper method to create a mongoStore instance
+        :param config: configuration dictionary
+        :param config_collection_name: collection name to build the mongo store
+        :return:
+            MongoStore instance based on the configuration parameters
+        """
         return MongoStore(database=config[config_collection_name]['db'],
                           collection_name=config[config_collection_name]['collection_name'],
                           host=config[config_collection_name]['host'],

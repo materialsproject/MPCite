@@ -10,6 +10,9 @@ from tqdm import *
 
 logger = logging.getLogger('mpcite')
 
+
+
+
 class OstiRecord(object):
     """object defining a MP-specific record for OSTI"""
     def __init__(self, adapter):

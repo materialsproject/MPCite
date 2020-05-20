@@ -7,6 +7,8 @@ from maggma.stores import Store
 from pathlib import Path
 from utility import DictAsMember
 from adapter import OstiMongoAdapter
+from typing import Iterable, List, Union, Tuple
+from utility import OSTI
 
 
 class DoiBuilder(Builder):
@@ -25,7 +27,7 @@ class DoiBuilder(Builder):
 
     """
 
-    def __init__(self, adapter: OstiMongoAdapter, config: dict, **kwargs):
+    def __init__(self, adapter: OstiMongoAdapter, osti: OSTI, **kwargs):
         """
          connection with materials database
             1. establish connection with materials collection (Guaranteed online)
@@ -44,111 +46,153 @@ class DoiBuilder(Builder):
                          targets=[adapter.doi_store],
                          **kwargs)
         self.num_bibtex_errors = 0
-        self.elink = config['osti']['elink']
-        self.explorer = config['osti']['explorer']
+        self.osti = osti
+        self.logger.debug("DOI Builder Succesfully instantiated")
 
-    def get_items(self):
+    def get_items(self) -> Iterable:
         """
         Gets all materials that need a DOI
+            1. compare list of materials that in the materials collection against the ones in the DOI collection
+            2. find and return the ones that needs update. Return the ones that satisfy the following conditions
+                1. material that is in the material collection, but is NOT in the DOI collection
+                2. valid is False
+                3. condition (1) and (2) does not satisfy, but in the DOI collection, DOI doesn't exist
+                4. condition (1) and (2) does not satisfy, but in the DOI collection, DOI bibtext does not exist
+                5. condition (1) and (2) does not satisfy, but in the DOI collection, _status is not COMPLETED
+
+
+        Note that 2.2 happen when something bad happened, like a material got moved or something,
+        so that DOI entry needs to be updated
+
+        Note that 2.3 happens when MPCite submitted a material to ELink and is waiting to hear back
+
+        Note that 2.4 happens when MPCite submitted a material to ELink, queried OSTI, and does not find anything,
+        therefore needs to constantly reachout to ELINK and OSTI for update
+
         Returns:
             generator of materials to retrieve/build DOI
         """
-        self.logger.info("DoiBuilder Started")
-        # self.logger.info("Setting indexes")
-        # self.ensure_indicies()
-        # q = self.materials.lu_filter(self.dois)
-        # updated_mats = set(self.materials.distinct(self.materials.key, q))
-
-        # weekday = date.today().weekday()
-        # if weekday == 0 or weekday == 6:
-        #    day = 'Sunday' if weekday else 'Monday'
-        #    self.logger.info('no validation on {}'.format(day))
-        #    return []
-
+        self.logger.info("DoiBuilder Get Item Started")
+        # TODO: ask patrick if he can come up with better query
+        materials = set(self.adapter.materials_store.distinct(self.adapter.materials_store.key))
+        dois = set(self.adapter.doi_store.distinct(self.adapter.doi_store.key))
+        to_add = list(materials - dois)
+        self.logger.debug(f"There are {len(to_add)} records that are in the materials collection but are not in "
+                          f"the DOIs collection")
         query = {
-            '$or': [{'valid': False}, {'doi': {'$exists': False}}, {'bibtex': {'$exists': False}}]
+            '$or': [{'valid': False},
+                    {'doi': {'$exists': False}},
+                    {'bibtex': {'$exists': False}},
+                    {'_status': {'$ne': 'COMPLETED'}}]
         }
-        mpids = self.adapter.doi_store.distinct(self.adapter.doi_store.key, query)
-        self.total = len(mpids)
-        self.logger.info('{} materials to process'.format(self.total))
+        to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, query)
+        self.logger.debug(f"There are {len(to_update)} records that are already in DOI collection but needs to be "
+                          f"updated")  # TODO the doi collection i was given is different than the test elink database
+        overall = to_add + to_update
+        # overall = to_update
+        self.logger.info(f"Overall, There are {len(overall)} records that needs to be updated")
+        return overall
 
-        return self.adapter.materials_store.query(
-            criteria={self.adapter.materials_store.key: {'$in': mpids}},
-            properties=[self.adapter.materials_store.key]  # , "structure", self.materials.lu_field],
-        )
-
-    def process_item(self, item):
+    def process_item(self, item: str) -> dict:
         """
         build current document with DOI info
         Args:
-            item (dict): a dict with a material_id and ...?
+            item (str): taskid/mp-id of the material
         Returns:
             dict: a DOI dict
         """
-        material_id = item[self.adapter.materials_store.key]
-        self.logger.debug("get DOI doc for {}".format(material_id))
+        material_id = item
+        self.logger.info("Processing document with task_id = {}".format(material_id))
         doi_doc = {self.adapter.materials_store.key: material_id}
 
         # validate DOI
         time.sleep(.5)
-        doi, status = self.get_doi_from_elink(material_id)
-        self.logger.debug('{}: {} ({})'.format(material_id, doi, status))
-        doi_doc.update({'doi': doi, 'status': status, 'valid': False})
-        ready = bool(status == 'COMPLETED' or (status == 'PENDING' and doi))
-        if ready and self.num_bibtex_errors < 3:
+        result = self.get_doi_from_elink(material_id)
+        if result is None:
             try:
-                doi_doc['bibtex'] = self.get_bibtex(doi)
-                doi_doc['valid'] = True
-            except ValueError:
-                self.num_bibtex_errors += 1
+                self.post_data_to_elink({})
+            except Exception as e:
+                self.logger.error(f"posting failed due to {e}")
+        else:
+            doi, status = result
+            self.logger.debug('{}: {} ({}) received from E-Link'.format(material_id, doi, status))
+
+            # need send a new request
+        # doi_doc.update({'doi': doi, 'status': status, 'valid': False})
+        # ready = bool(status == 'COMPLETED' or (status == 'PENDING' and doi))
+        # if ready and self.num_bibtex_errors < 3:
+        #     try:
+        #         doi_doc['bibtex'] = self.get_bibtex(doi)
+        #         doi_doc['valid'] = True
+        #     except ValueError:
+        #         self.num_bibtex_errors += 1
 
         # TODO record generation and submission
         # if not rec.generate(num_or_list):
         #    return
         # rec.submit()
-
-        self.logger.debug(doi_doc)
         return doi_doc
 
     def update_targets(self, items):
         self.logger.info("No items to update")
 
-    ########### utilities ###################
+    ############ utilities ###################
+    class MultiValueFoundOnELinkError(Exception):
+        pass
 
-    def osti_request(self, req_type='get', payload=None):
-        self.logger.debug('{} request to {} w/ payload {} ...'.format(
-            req_type, self.elink.endpoint, payload
-        ))
-        auth = (self.elink.user, self.elink.password)
-        if req_type == 'get':
-            r = requests.get(self.elink.endpoint, auth=auth, params=payload)
-        elif req_type == 'post':
-            r = requests.post(self.elink.endpoint, auth=auth, data=payload)
-        else:
-            self.logger.error('unsupported request type {}'.format(req_type))
-            sys.exit(1)
-        if r.status_code != 200:
-            self.logger.error('request failed w/ code {}'.format(r.status_code))
-            sys.exit(1)
-        content = parse(r.content)['records']
-        if 'record' in content:
-            records = content.pop('record')
-        else:
-            self.logger.error('no record found for payload {}'.format(payload))
-            return None
-        content['records'] = records if isinstance(records, list) else [records]
-        return content
+    class HTTPError(Exception):
+        pass
 
-    def get_doi_from_elink(self, mpid_or_ostiid):
-        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid \
-                                  or 'mvc-' in mpid_or_ostiid else 'osti_id'
-        content = self.osti_request(payload={key: mpid_or_ostiid})
-        if content is None:
-            msg = '{} not in E-Link. Run `mpcite update`?'.format(mpid_or_ostiid)
+    def post_data_to_elink(self, data):
+        """
+
+        :param data: data to post, gaurenteed in xml format
+        :return:
+        """
+        self.logger.info("Posting data to elink")
+        auth = (self.osti.elink.username, self.osti.elink.password)
+        r = requests.post(self.osti.elink.endpoint, auth=auth, data=data)
+        # TODO walk through the submit function with patrick
+        # https://github.com/materialsproject/MPCite/blob/next_gen/mpcite/record.py#L115
+        pass
+
+    def get_doi_from_elink(self, mpid_or_ostiid: str) -> Union[None, Tuple[str, str]]:
+        """
+        Get DOI from E-link
+        If nothing is returned, that means E-Link does not have that record yet, return None
+        raise error if
+            - found multiple entries on e-link
+            - got an error code that is not 200
+
+        :param mpid_or_ostiid:
+        :return:
+            None if E-Link returned nothing
+            otherwise a tuple of (DOI, status), ex: (10.5072/1322571, COMPLETED)
+            Note, E-link changed captilization,
+            for MPCite, we are ALWAYS going to capitalize the status for consistency
+        """
+        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid or 'mvc-' in mpid_or_ostiid else 'osti_id'
+        payload = {key: mpid_or_ostiid}
+        auth = (self.osti.elink.username, self.osti.elink.password)
+
+        self.logger.debug('GET from {} w/i payload = {} ...'.format(self.osti.elink.endpoint, payload))
+
+        r = requests.get(self.osti.elink.endpoint, auth=auth, params=payload)
+        if r.status_code == 200:
+            content = parse(r.content)
+            if int(content["records"]["@numfound"]) == 1:
+                doi = content["records"]["record"]["doi"]
+                return doi["#text"], doi["@status"]
+            if int(content["records"]["@numfound"]) == 0:
+                return None
+            else:
+                msg = f"Multiple records for {mpid_or_ostiid} is found"
+                self.logger.error(msg)
+                raise DoiBuilder.MultiValueFoundOnELinkError(msg)
+        else:
+            msg = f"Error code from GET is {r.status_code}"
             self.logger.error(msg)
-            raise ValueError(msg)
-        doi = content['records'][0]['doi']
-        return doi['#text'], doi['@status']
+            raise DoiBuilder.HTTPError(msg)
 
     def get_bibtex(self, doi):
         """get bibtex string for single material/doi"""
