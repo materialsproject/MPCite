@@ -4,40 +4,63 @@ from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
 from monty.serialization import loadfn
+from maggma.core import Store
 from xmltodict import parse
 from tqdm import *
+from typing import Union
+from maggma.stores import MongoStore
 
 logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
-    def __init__(self, db: Database, duplicates, elink):
-        self.db: Database = db
-        self.matcoll:Collection = db.materials
-        self.doicoll:Collection = db.dois
+    def __init__(self, materials_store: Store, dois_store: Store, robocrys_store: Store, duplicates, elink):
+        self.materials_store: Store = materials_store
+        self.doi_store: Store = dois_store
+        self.robocrys_store: Store = robocrys_store
         self.duplicates = duplicates
         self.auth = (elink.user, elink.password)
         self.endpoint = elink.endpoint
 
     @classmethod
     def from_config(cls, config):
-        client = MongoClient(config["material"]['host'], config["material"]['port'], j=False)
-        db = client[config["material"]['db']]
-        try:
-            db.authenticate(config["material"]['username'], config["material"]['password'])
-        except:
-            logger.error('authentication failed for {}'.format("materials"))
-            sys.exit(1)
-        logger.debug('using DB from {}'.format("materials"))
+        """
+        generate an OstiMongoAdapter instance
+        Please note that the stores(ex:materials_store) in there should NOT be connected yet.
+        They should be connected in the builder interface
+
+        :param config: config dictionary that contains materials database connection / debug database information
+        :return:
+            OstiMongoAdapater instance
+        """
+        materials_store = cls._create_mongostore(config, config_collection_name="materials_collection")
+        dois_store = cls._create_mongostore(config, config_collection_name="dois_collection")
+        robocrys_store = cls._create_mongostore(config, config_collection_name="robocrys_collection")
+
+        logger.debug(f'using DB from {materials_store.name, dois_store.name, robocrys_store.name}')
+
         duplicates_file = os.path.expandvars(config.duplicates_file)
-        duplicates = loadfn(duplicates_file) \
-                if os.path.exists(duplicates_file) else {}
-        return OstiMongoAdapter(db, duplicates, config.osti.elink)
+        duplicates = loadfn(duplicates_file) if os.path.exists(duplicates_file) else {}
+
+        return OstiMongoAdapter(materials_store=materials_store,
+                                dois_store=dois_store,
+                                robocrys_store=robocrys_store,
+                                duplicates=duplicates,
+                                elink=config.osti.elink)
+
+    @classmethod
+    def _create_mongostore(cls, config, config_collection_name: str):
+        return MongoStore(database=config[config_collection_name]['db'],
+                          collection_name=config[config_collection_name]['collection_name'],
+                          host=config[config_collection_name]['host'],
+                          port=config[config_collection_name]["port"],
+                          username=config[config_collection_name]["username"],
+                          password=config[config_collection_name]["password"])
 
     def _reset(self, matcoll=False, rows=None):
         """remove `doi` keys from matcoll, clear and reinit doicoll"""
         if matcoll:
-            matcoll_clean = self.matcoll.update(
+            matcoll_clean = self.materials_store.update(
                 {'doi': {'$exists': True}}, {'$unset': {'doi': 1, 'doi_bibtex': 1}},
                 multi=True
             )
@@ -46,7 +69,7 @@ class OstiMongoAdapter(object):
             else:
                 logger.error('DOI cleaning of matcoll failed!')
                 return
-        doicoll_remove = self.doicoll.remove()
+        doicoll_remove = self.doi_store.remove()
         if doicoll_remove['ok']:
             logger.info('doi collection removed.')
         else:
@@ -78,7 +101,7 @@ class OstiMongoAdapter(object):
                     doc['validated_on'] = datetime.combine(date.today(), datetime.min.time())
                     doc['doi'] = record['doi']['#text']
                 doi_docs.append(doc)
-            num_records = len(self.doicoll.insert(doi_docs))
+            num_records = len(self.doi_store.insert(doi_docs))
             pbar.update(num_records)
         pbar.close()
         logger.info('all DOIs pulled from E-Link and inserted into doicoll')
@@ -106,7 +129,7 @@ class OstiMongoAdapter(object):
             Scatter(x=[], y=[], line=dict(dash='dot', color=(colors[4])), name='newly built DOIs'),
         ]
         num_requested_dois = 0
-        for doc in self.doicoll.aggregate([
+        for doc in self.doi_store.aggregate([
             {'$group': {'_id': '$created_on', 'num': {'$sum': 1}}},
             {'$sort': {'_id': 1}},
         ]):
@@ -117,7 +140,7 @@ class OstiMongoAdapter(object):
             traces[1].x.append(date)
             traces[1].y.append(num_requested_dois)
         num_validated_dois = 0
-        for doc in self.doicoll.aggregate([
+        for doc in self.doi_store.aggregate([
             {'$match': {'doi': {'$exists': True}}},
             {'$group': {'_id': '$validated_on', 'num': {'$sum': 1}}},
             {'$sort': {'_id': 1}},
@@ -129,7 +152,7 @@ class OstiMongoAdapter(object):
             traces[2].x.append(date)
             traces[2].y.append(num_validated_dois)
         num_bibtexed_dois = 0
-        for doc in self.doicoll.aggregate([
+        for doc in self.doi_store.aggregate([
             {'$match': {
                 'doi': {'$exists': True}, 'bibtex': {'$exists': True},
             }},
@@ -143,7 +166,7 @@ class OstiMongoAdapter(object):
             traces[3].x.append(date)
             traces[3].y.append(num_bibtexed_dois)
         num_built_dois = 0
-        for doc in self.doicoll.aggregate([
+        for doc in self.doi_store.aggregate([
             {'$match': {
                 'doi': {'$exists': True}, 'bibtex': {'$exists': True},
                 'built_on': {'$exists': True}
@@ -160,7 +183,7 @@ class OstiMongoAdapter(object):
         dates = [datetime.combine(d, datetime.min.time()) for d in traces[1].x]
         nmats = {
             doc['_id']: doc['num']
-            for doc in self.matcoll.aggregate([
+            for doc in self.materials_store.aggregate([
                 {'$group': {
                     '_id': self._date_range_group_cond(dates),
                     'num': {'$sum': 1}
@@ -180,14 +203,14 @@ class OstiMongoAdapter(object):
 
     def get_materials_cursor(self, num_or_list):
         if isinstance(num_or_list, int) and num_or_list > 0:
-            existent_mpids = self.doicoll.find().distinct('_id')
-            return self.matcoll.find({
+            existent_mpids = self.doi_store.find().distinct('_id')
+            return self.materials_store.find({
                 'doi': {'$exists': False}, 'sbxn': 'core',
                 'task_id': {'$nin': existent_mpids}
             }, limit=num_or_list)
         elif isinstance(num_or_list, list) and len(num_or_list) > 0:
             mp_ids = [el if 'mp' in el else 'mp-'+el for el in num_or_list]
-            return self.matcoll.find({'task_id': {'$in': mp_ids}})
+            return self.materials_store.find({'task_id': {'$in': mp_ids}})
         else:
           logger.error('cannot get materials cursor from {}'.format(num_or_list))
           return []
@@ -206,7 +229,7 @@ class OstiMongoAdapter(object):
     def get_osti_id(self, mpid):
         # empty osti_id = new submission -> new DOI
         # check for existing doi to distinguish from edit/update scenario
-        doi_entry = self.doicoll.find_one({'_id': mpid})
+        doi_entry = self.doi_store.find_one({'_id': mpid})
         if doi_entry is not None and 'doi' not in doi_entry:
             logger.error('not updating {} due to pending DOI'.format(mpid))
             return None
@@ -229,10 +252,10 @@ class OstiMongoAdapter(object):
                         doc['validated_on'] = doc['created_on']
                 dois_insert.append(doc)
         if dois_insert:
-            docs_inserted = self.doicoll.insert(dois_insert)
+            docs_inserted = self.doi_store.insert(dois_insert)
             logger.debug('{} DOIs inserted'.format(len(docs_inserted)))
         if dois_update:
-            ndocs_updated = self.doicoll.update(
+            ndocs_updated = self.doi_store.update(
                 {'_id': {'$in': dois_update}},
                 {'$set': {'updated_on': datetime.now()}},
                 multi=True

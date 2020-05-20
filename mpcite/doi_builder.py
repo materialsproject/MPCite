@@ -3,40 +3,49 @@ from datetime import datetime, timedelta, date
 from xmltodict import parse
 from maggma.core.builder import Builder
 import sys
-
-mod_dir = os.path.dirname(os.path.abspath(__file__))
-default_config = os.path.normpath(os.path.join(mod_dir, os.pardir, 'files', 'config.yaml'))
-
-
-class DictAsMember(dict):
-    # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
-    def __getattr__(self, name):
-        value = self[name]
-        if isinstance(value, dict):
-            value = DictAsMember(value)
-        return value
+from maggma.stores import Store
+from pathlib import Path
+from utility import DictAsMember
+from adapter import OstiMongoAdapter
 
 
 class DoiBuilder(Builder):
+    """
+    A builder to combine information from the Materials Project database(MP) and Osti Explorer(OSTI) to produce a *dois*
+    collections
 
-    def __init__(self, materials, dois, **kwargs):
+    *dois* collection is similar to a "cache" where it maps the mp ids that are in MP to the DOIs that are in the OSTI
+
+    This builder will find all materials that are in MP but are not in the  in the *dois* collection, call this list of
+    uncited_materials
+
+    It will submit the uncited_materials to OSTI and constantly check whether OSTI has updated its database
+
+    if it finds one of the uncited_materials in OSTI, it will update the *dois* collection
+
+    """
+
+    def __init__(self, adapter: OstiMongoAdapter, config: dict, **kwargs):
         """
-        obtain DOIs for all/new materials
-        Args:
-            materials (Store): Store of materials documents
-            dois (Store): Store of DOIs data
+         connection with materials database
+            1. establish connection with materials collection (Guaranteed online)
+            2. establish connection with doi collection (online or local)
+            3. establish connection with robocrys (Guaranteed online)
+
+        establish connection with ELink to submit info
+
+        establish connection with osti explorer to get bibtex
+        :param adapter: OstiMongoAdapter that keeps track of materials, doi, and other related stores
+        :param config: configuration dictionary
+        :param kwargs: other keywords fed into Builder(will be documented as development goes on)
         """
-        self.materials = materials
-        self.dois = dois
+        self.adapter = adapter
+        super().__init__(sources=[adapter.materials_store, adapter.robocrys_store],
+                         targets=[adapter.doi_store],
+                         **kwargs)
         self.num_bibtex_errors = 0
-
-        with open(default_config, 'r') as f:
-            config = DictAsMember(yaml.load(f, Loader=yaml.SafeLoader))
-
-        self.elink = config.osti.elink
-        self.explorer = config.osti.explorer
-
-        super().__init__(sources=[materials], targets=[dois], **kwargs)
+        self.elink = config['osti']['elink']
+        self.explorer = config['osti']['explorer']
 
     def get_items(self):
         """
@@ -59,13 +68,13 @@ class DoiBuilder(Builder):
         query = {
             '$or': [{'valid': False}, {'doi': {'$exists': False}}, {'bibtex': {'$exists': False}}]
         }
-        mpids = self.dois.distinct(self.dois.key, query)
+        mpids = self.adapter.doi_store.distinct(self.adapter.doi_store.key, query)
         self.total = len(mpids)
         self.logger.info('{} materials to process'.format(self.total))
 
-        return self.materials.query(
-            criteria={self.materials.key: {'$in': mpids}},
-            properties=[self.materials.key]  # , "structure", self.materials.lu_field],
+        return self.adapter.materials_store.query(
+            criteria={self.adapter.materials_store.key: {'$in': mpids}},
+            properties=[self.adapter.materials_store.key]  # , "structure", self.materials.lu_field],
         )
 
     def process_item(self, item):
@@ -76,9 +85,9 @@ class DoiBuilder(Builder):
         Returns:
             dict: a DOI dict
         """
-        material_id = item[self.materials.key]
+        material_id = item[self.adapter.materials_store.key]
         self.logger.debug("get DOI doc for {}".format(material_id))
-        doi_doc = {self.materials.key: material_id}
+        doi_doc = {self.adapter.materials_store.key: material_id}
 
         # validate DOI
         time.sleep(.5)

@@ -9,7 +9,7 @@ from plotly.graph_objs import Layout
 from pyspin import spin
 from adapter import OstiMongoAdapter
 from record import OstiRecord
-from builders import DoiBuilder
+from doi_builder import DoiBuilder
 from pathlib import Path
 
 FORMAT = '[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s'
@@ -158,7 +158,7 @@ def cli():
 
 def reset(args):
     logger.debug("Reset Mode Engaged")
-    oma._reset(matcoll=args.matcoll, rows=args.rows)
+    oma._reset(matcoll=args.materials_store, rows=args.rows)
     bld.limit = 100 #oma.doicoll.count()
     bld.show_pbar = True
     bld.save_bibtex()
