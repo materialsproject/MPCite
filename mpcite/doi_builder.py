@@ -100,7 +100,7 @@ class DoiBuilder(Builder):
         mp_id = item
         mp_id = "mp-22389"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
-        record = self.generate_posting_data(mp_id=mp_id)
+        record: ELinkRecord = self.generate_posting_data(mp_id=mp_id)
         if record.osti_id is None or record.osti_id == '':
             return record.dict(exclude={"osti_id", "doi"})
         else:
@@ -111,10 +111,12 @@ class DoiBuilder(Builder):
         send post request
         :param items:
         :return:
+            None
         """
         self.logger.debug(f"Updating/registering {len(items)} items")
         xml_items_to_send: bytes = self.prep_posting_data(items)
         self.post_data_to_elink(data=xml_items_to_send)
+        # TODO with updated info returned by E-Link, update DOI Collection
 
     """
     Utility functions
