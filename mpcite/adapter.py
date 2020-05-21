@@ -21,7 +21,6 @@ class OstiMongoAdapter(object):
         :param dois_store: represent a connection to the dois store
         :param robocrys_store: represent a connection to the robocrys store
         :param duplicates: idk yet
-        :param elink: lol, idk yet
         """
         self.materials_store: Store = materials_store
         self.doi_store: Store = dois_store
@@ -67,7 +66,8 @@ class OstiMongoAdapter(object):
                           host=config[config_collection_name]['host'],
                           port=config[config_collection_name]["port"],
                           username=config[config_collection_name]["username"],
-                          password=config[config_collection_name]["password"])
+                          password=config[config_collection_name]["password"],
+                          key=config[config_collection_name]["key"] if "key" in config[config_collection_name] else "task_id")
 
     def _reset(self, matcoll=False, rows=None):
         """remove `doi` keys from matcoll, clear and reinit doicoll"""

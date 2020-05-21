@@ -35,17 +35,15 @@ explorer = Connection.parse_obj(config["osti"]["explorer"])
 osti = OSTI(elink=elink, explorer=explorer)
 
 # decalre builder instance
-bld = DoiBuilder(oma, osti)
+send_size = 1
+bld = DoiBuilder(oma, osti, send_size=1, sync=True)
 
 # run program
 bld.run()
-# rec = OstiRecord(oma)
-# logger.debug('{} loaded'.format(config_file))
-
-# mpid that exist mp-10070 on test e-link
-# print(bld.get_doi_from_elink(mpid_or_ostiid="mp-3"))
 
 
-
-
+# from xmltodict import parse
+# record_xml = bld.get_elink_response_xml_by_mp_id("mp-22389")
+# record_dict = elink_response_dict = parse(record_xml)
+# print(record_dict)
 

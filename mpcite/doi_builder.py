@@ -1,14 +1,15 @@
 import logging, requests, pybtex, yaml, os, time
 from datetime import datetime, timedelta, date
+from dicttoxml import dicttoxml
 from xmltodict import parse
 from maggma.core.builder import Builder
-import sys
-from maggma.stores import Store
-from pathlib import Path
-from utility import DictAsMember
 from adapter import OstiMongoAdapter
 from typing import Iterable, List, Union, Tuple
-from utility import OSTI
+from utility import OSTI, ELinkRecord, DOICollectionRecord, RoboCrys
+from materials_model import Material
+from io import StringIO
+from pybtex.database.input import bibtex
+import json
 
 
 class DoiBuilder(Builder):
@@ -27,7 +28,7 @@ class DoiBuilder(Builder):
 
     """
 
-    def __init__(self, adapter: OstiMongoAdapter, osti: OSTI, **kwargs):
+    def __init__(self, adapter: OstiMongoAdapter, osti: OSTI, send_size=1000, sync=True, **kwargs):
         """
          connection with materials database
             1. establish connection with materials collection (Guaranteed online)
@@ -38,7 +39,9 @@ class DoiBuilder(Builder):
 
         establish connection with osti explorer to get bibtex
         :param adapter: OstiMongoAdapter that keeps track of materials, doi, and other related stores
-        :param config: configuration dictionary
+        :param osti: osti connection specification
+        :param send_size: the maximum send size that E-Link allows
+        :param sync: boolean representing whether to sync DOI collection with Elink and Explorer in get_items
         :param kwargs: other keywords fed into Builder(will be documented as development goes on)
         """
         self.adapter = adapter
@@ -47,152 +50,125 @@ class DoiBuilder(Builder):
                          **kwargs)
         self.num_bibtex_errors = 0
         self.osti = osti
+        self.send_size = send_size
+        self.sync = sync
         self.logger.debug("DOI Builder Succesfully instantiated")
+        self.logger = logging.getLogger(__name__)
 
     def get_items(self) -> Iterable:
         """
-        Gets all materials that need a DOI
-            1. compare list of materials that in the materials collection against the ones in the DOI collection
-            2. find and return the ones that needs update. Return the ones that satisfy the following conditions
-                1. material that is in the material collection, but is NOT in the DOI collection
-                2. valid is False
-                3. condition (1) and (2) does not satisfy, but in the DOI collection, DOI doesn't exist
-                4. condition (1) and (2) does not satisfy, but in the DOI collection, DOI bibtext does not exist
-                5. condition (1) and (2) does not satisfy, but in the DOI collection, _status is not COMPLETED
+        Get a list of material that requires registration with E-Link or an update.
 
+        Step 1[OPTIONAL]: Perform syncing from Elink to DOI database.
+        Step 2: Compute materials that requires update or registration
+            - A new material requires registration if it is in the MP database, but not in the DOI database
+            - A material requires update if its valid field is False
+        Step 3: cap the number of materials sent to self.send size due to bandwidth limit
 
-        Note that 2.2 happen when something bad happened, like a material got moved or something,
-        so that DOI entry needs to be updated
-
-        Note that 2.3 happens when MPCite submitted a material to ELink and is waiting to hear back
-
-        Note that 2.4 happens when MPCite submitted a material to ELink, queried OSTI, and does not find anything,
-        therefore needs to constantly reachout to ELINK and OSTI for update
+        Note, this function will by default sync with Elink and Explorer. To turn sync off, set self.sync to false
 
         Returns:
             generator of materials to retrieve/build DOI
         """
         self.logger.info("DoiBuilder Get Item Started")
-        # TODO: ask patrick if he can come up with better query
-        materials = set(self.adapter.materials_store.distinct(self.adapter.materials_store.key))
-        dois = set(self.adapter.doi_store.distinct(self.adapter.doi_store.key))
-        to_add = list(materials - dois)
-        self.logger.debug(f"There are {len(to_add)} records that are in the materials collection but are not in "
-                          f"the DOIs collection")
-        query = {
-            '$or': [{'valid': False},
-                    {'doi': {'$exists': False}},
-                    {'bibtex': {'$exists': False}},
-                    {'_status': {'$ne': 'COMPLETED'}}]
-        }
-        to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, query)
-        self.logger.debug(f"There are {len(to_update)} records that are already in DOI collection but needs to be "
-                          f"updated")  # TODO the doi collection i was given is different than the test elink database
-        overall = to_add + to_update
+        if self.sync:
+            self.sync_doi_collection()
+
+        new_materials_to_register = self.find_new_materials()
+
+        to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, criteria={"valid": False})
+        self.logger.debug(f"Found {len(to_update)} materials needs to be updated")
+
+        overall = new_materials_to_register + to_update  # limit the # of items returned
+        total = len(overall)
+        overall = overall[:self.send_size]
         # overall = to_update
-        self.logger.info(f"Overall, There are {len(overall)} records that needs to be updated")
+        self.logger.info(f"There are {total} materials that will be registered or updated. Due to bandwidth limit, "
+                         f"this run there will be updating the first {len(overall)} materials")
         return overall
 
-    def process_item(self, item: str) -> dict:
+    def process_item(self, item: str) -> ELinkRecord:
         """
-        build current document with DOI info
+        Post item to E-Link
+        1. Prepare meta data needed for posting by calling prep_posting_data
+        2. turn the pydantic record returned by prep_posting_data to xml format that is accepted by E-Link
+        3. post it
+        4. do error checking???
+
         Args:
             item (str): taskid/mp-id of the material
         Returns:
-            dict: a DOI dict
+            dict: a submitted DOI
         """
-        material_id = item
-        self.logger.info("Processing document with task_id = {}".format(material_id))
-        doi_doc = {self.adapter.materials_store.key: material_id}
-
-        # validate DOI
-        time.sleep(.5)
-        result = self.get_doi_from_elink(material_id)
-        if result is None:
-            try:
-                self.post_data_to_elink({})
-            except Exception as e:
-                self.logger.error(f"posting failed due to {e}")
-        else:
-            doi, status = result
-            self.logger.debug('{}: {} ({}) received from E-Link'.format(material_id, doi, status))
-
-            # need send a new request
-        # doi_doc.update({'doi': doi, 'status': status, 'valid': False})
-        # ready = bool(status == 'COMPLETED' or (status == 'PENDING' and doi))
-        # if ready and self.num_bibtex_errors < 3:
-        #     try:
-        #         doi_doc['bibtex'] = self.get_bibtex(doi)
-        #         doi_doc['valid'] = True
-        #     except ValueError:
-        #         self.num_bibtex_errors += 1
-
-        # TODO record generation and submission
-        # if not rec.generate(num_or_list):
-        #    return
-        # rec.submit()
-        return doi_doc
+        mp_id = item
+        mp_id = "mp-22389"
+        self.logger.info("Processing document with task_id = {}".format(mp_id))
+        # doi_doc = {self.adapter.materials_store.key: material_id}
+        record = self.prep_posting_data(mp_id=mp_id)
+        record_xml = dicttoxml(record.dict(exclude={"doi"}), custom_root='records', attr_type=False)
+        self.post_data_to_elink(data=record_xml, mp_id=mp_id)
+        return record
 
     def update_targets(self, items):
         self.logger.info("No items to update")
 
-    ############ utilities ###################
+    """
+    Utility functions
+    """
+
+    class MaterialNotFound(Exception):
+        pass
+
     class MultiValueFoundOnELinkError(Exception):
         pass
 
     class HTTPError(Exception):
         pass
 
-    def post_data_to_elink(self, data):
+    def prep_posting_data(self, mp_id: str) -> ELinkRecord:
+        """
+        Prepares data to submit to E-Link
+        Please note that if osti_id is set to anything other than '',
+        that means that this will be an update rather than registering for new data
+        :param mp_id:
+        :return:
+            ElinkRecord to be parsed into XML format and then submitted
+        """
+        material = self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id})
+        if material is None:
+            msg = f"Material {mp_id} is not found in the materials store"
+            self.logger.error(msg)
+            raise DoiBuilder.MaterialNotFound(msg)
+        else:
+            material = Material.parse_obj(material)
+
+        return ELinkRecord(osti_id=self._get_osti_id_for_update(mp_id=mp_id),
+                           title=ELinkRecord.get_title(material=material),
+                           product_nos=mp_id,
+                           accession_num=mp_id,
+                           publication_date=material.last_updated.strftime('%m/%d/%Y'),
+                           site_url=ELinkRecord.get_site_url(mp_id=mp_id),
+                           keywords=ELinkRecord.get_keywords(material=material),
+                           description= self.find_material_description(mp_id)
+                           )
+
+    def post_data_to_elink(self, data, mp_id):
         """
 
         :param data: data to post, gaurenteed in xml format
         :return:
         """
-        self.logger.info("Posting data to elink")
+        self.logger.info(f"Posting {mp_id} to elink")
         auth = (self.osti.elink.username, self.osti.elink.password)
         r = requests.post(self.osti.elink.endpoint, auth=auth, data=data)
-        # TODO walk through the submit function with patrick
-        # https://github.com/materialsproject/MPCite/blob/next_gen/mpcite/record.py#L115
-        pass
+        print("**********************")
+        print("status_code = ", r.status_code)
+        import json
 
-    def get_doi_from_elink(self, mpid_or_ostiid: str) -> Union[None, Tuple[str, str]]:
-        """
-        Get DOI from E-link
-        If nothing is returned, that means E-Link does not have that record yet, return None
-        raise error if
-            - found multiple entries on e-link
-            - got an error code that is not 200
-
-        :param mpid_or_ostiid:
-        :return:
-            None if E-Link returned nothing
-            otherwise a tuple of (DOI, status), ex: (10.5072/1322571, COMPLETED)
-            Note, E-link changed captilization,
-            for MPCite, we are ALWAYS going to capitalize the status for consistency
-        """
-        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid or 'mvc-' in mpid_or_ostiid else 'osti_id'
-        payload = {key: mpid_or_ostiid}
-        auth = (self.osti.elink.username, self.osti.elink.password)
-
-        self.logger.debug('GET from {} w/i payload = {} ...'.format(self.osti.elink.endpoint, payload))
-
-        r = requests.get(self.osti.elink.endpoint, auth=auth, params=payload)
-        if r.status_code == 200:
-            content = parse(r.content)
-            if int(content["records"]["@numfound"]) == 1:
-                doi = content["records"]["record"]["doi"]
-                return doi["#text"], doi["@status"]
-            if int(content["records"]["@numfound"]) == 0:
-                return None
-            else:
-                msg = f"Multiple records for {mpid_or_ostiid} is found"
-                self.logger.error(msg)
-                raise DoiBuilder.MultiValueFoundOnELinkError(msg)
-        else:
-            msg = f"Error code from GET is {r.status_code}"
-            self.logger.error(msg)
-            raise DoiBuilder.HTTPError(msg)
+        print(f"content = {json.dumps(parse(r.content), indent=2)}")
+        # wait, wtf, it is giving me "The service will respond with a summary of the submissions",
+        # and also i cant find the record that i just submitted lol
+        print("**********************")
 
     def get_bibtex(self, doi):
         """get bibtex string for single material/doi"""
@@ -221,11 +197,134 @@ class DoiBuilder(Builder):
             self.logger.error(msg)
             raise ValueError(msg)
 
-# class DoiCopyBuilder(CopyBuilder):
-#
-#     def process_item(self, item):
-#         doc = {'_id': item['_id'], 'task_id': item['_id']}
-#         doc['valid'] = 'validated_on' in item
-#         for k in ['doi', 'bibtex', 'last_updated']:
-#           doc[k] = item.get(k)
-#         return doc
+    def _get_osti_id_for_update(self, mp_id):
+        """
+        Used to determine if an update is necessary.
+
+        If '' is returned, implies update is not necessary.
+
+        Otherwise, an update is necessary
+        :param mp_id:
+        :return:
+        """
+        doi_entry = self.adapter.doi_store.query_one(criteria={self.adapter.doi_store.key: mp_id})
+        if doi_entry is None:
+            return ''
+        else:
+            return doi_entry['doi'].split('/')[-1]
+
+    def find_new_materials(self) -> List[str]:
+        """
+        find new materials to add by computing the difference between the MP and DOI collection
+
+        :return:
+            list of mp_id
+        """
+        materials = set(self.adapter.materials_store.distinct(self.adapter.materials_store.key))
+        dois = set(self.adapter.doi_store.distinct(self.adapter.doi_store.key))
+        to_add = list(materials - dois)
+        self.logger.debug(f"Found {len(to_add)} new Materials to register")
+        return to_add
+
+    def sync_doi_collection(self):
+        """
+        Sync DOI collection, set the status, and bibtext field[IN PROGRESS],
+        double check whether the DOI field matches??
+        If an entry is in the DOI collection but is not in E-Link, remove it
+
+        NOTE, this function might take a while to execute
+        :return:
+        """
+        all_keys = self.adapter.doi_store.distinct(field=self.adapter.doi_store.key)
+        self.logger.info(f"Syncing {len(all_keys)} DOIs")
+        for mp_id in all_keys:
+            self.sync_doi_entry(mp_id)
+
+        self.logger.info(f"DOI Collection synced. "
+                         f"Removed {len(all_keys) - self.adapter.doi_store.count()} that "
+                         f"are in DOI collection but not in E-Link")
+
+    def sync_doi_entry(self, mp_id):
+        """
+        Given a mp_id, check if it is in the E-Link
+        :param mp_id:
+        :return:
+        """
+        self.logger.debug(f"Syncing mpid {mp_id}")
+        collection_record = DOICollectionRecord.parse_obj(
+            self.adapter.doi_store.query_one(criteria={self.adapter.doi_store.key: mp_id}))
+
+        try:
+            elink_response_xml = self.get_elink_response_xml_by_mp_id(mpid_or_ostiid=mp_id)
+            elink_response_dict = parse(elink_response_xml)
+            if int(elink_response_dict["records"]["@numfound"]) == 1:
+                elink_record = ELinkRecord.parse_obj(elink_response_dict["records"]["record"])
+                self.sync_doi_entry_helper(collection_record, elink_record)
+            if int(elink_response_dict["records"]["@numfound"]) == 0:
+                self.logger.info(f"Dirty Material [{mp_id}] Found. "
+                                 f"Removing {mp_id} since it is in local DOI collection but not in E-link.")
+                self.adapter.doi_store.remove_docs(criteria={self.adapter.doi_store.key: mp_id})
+            else:
+                msg = f"Multiple records for {mp_id} is found"
+                self.logger.error(msg)
+                raise DoiBuilder.MultiValueFoundOnELinkError(msg)
+
+        except DoiBuilder.MultiValueFoundOnELinkError or DoiBuilder.HTTPError:
+            self.logger.error(f"sync failed for mp_id {mp_id}. Skipping")
+            return
+
+    def get_elink_response_xml_by_mp_id(self, mpid_or_ostiid: str) -> Union[None, bytes]:
+        """
+        Get Elink response by MP-id
+
+        It is gaurenteed that it should find only a single entry, if multiple found, there is a major error
+
+        :param mpid_or_ostiid: mp id in string
+        :return:
+            a record object
+        """
+        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid or 'mvc-' in mpid_or_ostiid else 'osti_id'
+        payload = {key: mpid_or_ostiid}
+        auth = (self.osti.elink.username, self.osti.elink.password)
+
+        self.logger.debug('GET from {} w/i payload = {} ...'.format(self.osti.elink.endpoint, payload))
+
+        r = requests.get(self.osti.elink.endpoint, auth=auth, params=payload)
+        if r.status_code == 200:
+            return r.content
+        else:
+            msg = f"Error code from GET is {r.status_code}"
+            self.logger.error(msg)
+            raise DoiBuilder.HTTPError(msg)
+
+    def sync_doi_entry_helper(self, collection_record: DOICollectionRecord, elink_record: ELinkRecord):
+        to_update = False
+        if collection_record.get_osti_id() != elink_record.osti_id:
+            to_update = True
+            msg = f"DOI record mismatch for mp_id = {collection_record.task_id}. " \
+                  f"Overwriting the one in DOI collection to match OSTI"
+            self.logger.error(msg)
+            collection_record.doi = elink_record.osti_id
+        if collection_record.get_status() != elink_record.doi["@status"]:
+            to_update = True
+            collection_record.set_status(elink_record.doi["@status"])
+
+        if to_update:
+            self.adapter.doi_store.update(docs=collection_record.dict(), key=self.adapter.doi_store.key)
+
+    def find_material_description(self, mp_id: str) -> str:
+        """
+        find materials description from robocrys database, if not found return the default description
+
+        :param mp_id: mp_id to query for in the robocrys database
+        :return:
+            description in string
+        """
+        robo_result = self.adapter.robocrys_store.query_one(criteria={self.adapter.robocrys_store.key: mp_id})
+        if robo_result is None:
+            return ELinkRecord.get_default_description()
+        else:
+            robo_result = RoboCrys.parse_obj(robo_result)
+            return robo_result.description
+
+

@@ -2,7 +2,8 @@ import pydantic
 from pydantic import BaseModel, Field
 from io import StringIO
 from pybtex.database.input import bibtex
-
+from materials_model import Material
+from datetime import datetime
 
 class DictAsMember(dict):
     # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
@@ -24,13 +25,33 @@ class OSTI(BaseModel):
     explorer: Connection = Field(..., title="Explorer endpoint")
 
 
-class Record(BaseModel):
+class DOICollectionRecord(BaseModel):
+    task_id: str = Field(...)
+    doi: str = Field(default='')
+    bibtex: str = Field(...)
+    _status: str = Field(...)
+    valid: bool = Field(False)
+
+    def get_status(self):
+        return self._status
+
+    def set_status(self, status):
+        self._status = status
+
+    def get_osti_id(self):
+        if self.doi is None or self.doi == '':
+            return ''
+        else:
+            return self.doi.split('/')[-1]
+
+
+class ELinkRecord(BaseModel):
     osti_id: str = Field(...)
     dataset_type: str = Field(default='SM')
     title: str = Field(...)
     creators: str = Field(default='Kristin Persson')
     product_nos: str = Field(..., title="MP id")
-    accession_num: str = Field(...)
+    accession_num: str = Field(..., title="MP id")
     contract_nos: str = Field('AC02-05CH11231; EDCBEE')
     originating_research_org: str = Field(
         default='Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)')
@@ -47,44 +68,39 @@ class Record(BaseModel):
     contributor_organizations: str = Field(default='MIT; UC Berkeley; Duke; U Louvain')
     subject_categories_code: str = Field(default='36 MATERIALS SCIENCE')
     keywords: str = Field(...)
-    description: str = Field(default='Computed materials data using density '
-                                     'functional theory calculations. These calculations determine '
-                                     'the electronic structure of bulk materials by solving '
-                                     'approximations to the Schrodinger equation. For more '
-                                     'information, see https://materialsproject.org/docs/calculations')
+    description: str = Field(default="")
+    doi: dict = Field({}, title="DOI info", description="Mainly used during GET request")
 
-    def _get_title(self, material):
-        formula = material['pretty_formula']
-        sg_num = material['spacegroup']['number']
-        return 'Materials Data on %s (SG:%d) by Materials Project' % (
-            formula, sg_num
-        )
+    @classmethod
+    def get_title(cls, material: Material):
+        formula = material.formula_pretty
+        return 'Materials Data on %s by Materials Project' % formula
 
-    def _get_creators(self, material):
-        creators = []
-        for author in material['snl_final']['about']['authors']:
-            names = author['name'].split()
-            last_name = names[-1]
-            first_name = ' '.join(names[:-1])
-            creators.append(', '.join([last_name, first_name]))
-        return '; '.join(creators)
-
-    def _get_site_url(self, mp_id):
+    @classmethod
+    def get_site_url(cls, mp_id):
         return 'https://materialsproject.org/materials/%s' % mp_id
 
-    def _get_related_resource(self, material):
-        bibtext_parser = bibtex.Parser()
-        bib_data = bibtext_parser.parse_stream(StringIO(material['snl_final']['about']['references']))
-        related_resource = []
-        for entry in bib_data.entries.values():
-            related_resource.append(entry.fields.get('url'))
-        return ', '.join(filter(None, related_resource))
-
-    def _get_keywords(self, material):
-        keywords = '; '.join(['crystal structure',
-                              material['snl_final']['reduced_cell_formula_abc'],
-                              material['snl_final']['chemsystem'],
-                              '; '.join(['-'.join(['ICSD', str(iid)]) for iid in material['icsd_ids']]),
-                              ])
-        keywords += '; electronic bandstructure' if material['has_bandstructure'] else ''
+    @classmethod
+    def get_keywords(cls, material):
+        # keywords = '; '.join(['crystal structure',
+        #                       material.formula_pretty,
+        #                       material.chemsys,
+        #                       '; '.join(['-'.join(['ICSD', str(iid)]) for iid in material['icsd_ids']]),
+        #                       ])
+        keywords = '; '.join(['crystal structure', material.formula_pretty, material.chemsys])
+        keywords += '; electronic bandstructure' if material.bandstructure is not None else ''
         return keywords
+
+    @classmethod
+    def get_default_description(cls):
+        return 'Computed materials data using density ' \
+               'functional theory calculations. These calculations determine '\
+               'the electronic structure of bulk materials by solving '\
+               'approximations to the Schrodinger equation. For more '\
+               'information, see https://materialsproject.org/docs/calculations'
+
+class RoboCrys(BaseModel):
+    material_id: str
+    last_updated: datetime
+    # condensed_structure
+    description: str
