@@ -4,6 +4,7 @@ from io import StringIO
 from pybtex.database.input import bibtex
 from materials_model import Material
 from datetime import datetime
+from typing import Union
 
 class DictAsMember(dict):
     # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
@@ -46,7 +47,7 @@ class DOICollectionRecord(BaseModel):
 
 
 class ELinkRecord(BaseModel):
-    osti_id: str = Field(...)
+    osti_id: Union[str, None] = Field(...)
     dataset_type: str = Field(default='SM')
     title: str = Field(...)
     creators: str = Field(default='Kristin Persson')

@@ -1,5 +1,4 @@
 import logging, requests, pybtex, yaml, os, time
-from datetime import datetime, timedelta, date
 from dicttoxml import dicttoxml
 from xmltodict import parse
 from maggma.core.builder import Builder
@@ -7,9 +6,7 @@ from adapter import OstiMongoAdapter
 from typing import Iterable, List, Union, Tuple
 from utility import OSTI, ELinkRecord, DOICollectionRecord, RoboCrys
 from materials_model import Material
-from io import StringIO
 from pybtex.database.input import bibtex
-import json
 
 
 class DoiBuilder(Builder):
@@ -87,7 +84,7 @@ class DoiBuilder(Builder):
                          f"this run there will be updating the first {len(overall)} materials")
         return overall
 
-    def process_item(self, item: str) -> ELinkRecord:
+    def process_item(self, item: str) -> dict:
         """
         Post item to E-Link
         1. Prepare meta data needed for posting by calling prep_posting_data
@@ -103,14 +100,21 @@ class DoiBuilder(Builder):
         mp_id = item
         mp_id = "mp-22389"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
-        # doi_doc = {self.adapter.materials_store.key: material_id}
-        record = self.prep_posting_data(mp_id=mp_id)
-        record_xml = dicttoxml(record.dict(exclude={"doi"}), custom_root='records', attr_type=False)
-        self.post_data_to_elink(data=record_xml, mp_id=mp_id)
-        return record
+        record = self.generate_posting_data(mp_id=mp_id)
+        if record.osti_id is None or record.osti_id == '':
+            return record.dict(exclude={"osti_id", "doi"})
+        else:
+            return record.dict(exclude={"doi"})
 
-    def update_targets(self, items):
-        self.logger.info("No items to update")
+    def update_targets(self, items: List[dict]):
+        """
+        send post request
+        :param items:
+        :return:
+        """
+        self.logger.debug(f"Updating/registering {len(items)} items")
+        xml_items_to_send: bytes = self.prep_posting_data(items)
+        self.post_data_to_elink(data=xml_items_to_send)
 
     """
     Utility functions
@@ -125,7 +129,7 @@ class DoiBuilder(Builder):
     class HTTPError(Exception):
         pass
 
-    def prep_posting_data(self, mp_id: str) -> ELinkRecord:
+    def generate_posting_data(self, mp_id: str) -> ELinkRecord:
         """
         Prepares data to submit to E-Link
         Please note that if osti_id is set to anything other than '',
@@ -142,29 +146,33 @@ class DoiBuilder(Builder):
         else:
             material = Material.parse_obj(material)
 
-        return ELinkRecord(osti_id=self._get_osti_id_for_update(mp_id=mp_id),
-                           title=ELinkRecord.get_title(material=material),
-                           product_nos=mp_id,
-                           accession_num=mp_id,
-                           publication_date=material.last_updated.strftime('%m/%d/%Y'),
-                           site_url=ELinkRecord.get_site_url(mp_id=mp_id),
-                           keywords=ELinkRecord.get_keywords(material=material),
-                           description= self.find_material_description(mp_id)
-                           )
+        elink_record = ELinkRecord(osti_id=self._get_osti_id_for_update(mp_id=mp_id),
+                                   title=ELinkRecord.get_title(material=material),
+                                   product_nos=mp_id,
+                                   accession_num=mp_id,
+                                   publication_date=material.last_updated.strftime('%m/%d/%Y'),
+                                   site_url=ELinkRecord.get_site_url(mp_id=mp_id),
+                                   keywords=ELinkRecord.get_keywords(material=material),
+                                   description=self.find_material_description(mp_id)
+                                   )
 
-    def post_data_to_elink(self, data, mp_id):
+        return elink_record
+
+    def post_data_to_elink(self, data):
         """
-
-        :param data: data to post, gaurenteed in xml format
+        Send data to elink
+        :param data: data to post, list of xml data
         :return:
         """
-        self.logger.info(f"Posting {mp_id} to elink")
         auth = (self.osti.elink.username, self.osti.elink.password)
+        print("**********************")
+        print("Posting the following data: ")
+        print(data)
+        print("**********************")
         r = requests.post(self.osti.elink.endpoint, auth=auth, data=data)
         print("**********************")
         print("status_code = ", r.status_code)
         import json
-
         print(f"content = {json.dumps(parse(r.content), indent=2)}")
         # wait, wtf, it is giving me "The service will respond with a summary of the submissions",
         # and also i cant find the record that i just submitted lol
@@ -197,7 +205,7 @@ class DoiBuilder(Builder):
             self.logger.error(msg)
             raise ValueError(msg)
 
-    def _get_osti_id_for_update(self, mp_id):
+    def _get_osti_id_for_update(self, mp_id) -> str:
         """
         Used to determine if an update is necessary.
 
@@ -327,4 +335,26 @@ class DoiBuilder(Builder):
             robo_result = RoboCrys.parse_obj(robo_result)
             return robo_result.description
 
+    def prep_posting_data(self, items: List[dict]) -> bytes:
+        """
+        using dicttoxml and customized xml configuration to generate posting data according to Elink Specification
+        :param items: list of dictionary of data
+        :return:
+            xml data in bytes, ready to be sent via request module
+        """
+
+        xml = dicttoxml(items, custom_root='records', attr_type=False)
+        from xml.dom.minidom import parseString
+        records_xml = parseString(xml)
+        items = records_xml.getElementsByTagName('item')
+        for item in items:
+            records_xml.renameNode(item, '', item.parentNode.nodeName[:-1])
+        return records_xml.toxml().encode('utf-8')
+        # dom = parseString(xml)
+        # print(dom.toprettyxml())
+        # return xml
+        # items = xml_items_to_send.getElementsByTagName('item')
+        # for item in items:
+        #     xml_items_to_send.renameNode(item, '', item.parentNode.nodeName[:-1])
+        # return xml_items_to_send
 
