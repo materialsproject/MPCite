@@ -3,9 +3,10 @@ import json
 from xmltodict import parse
 from xml.dom.minidom import parseString
 import logging
+
 elink_endpoint = "http://www.osti.gov/elinktest/2416api"
-username = "materials2416websvs"
-password = "Sti!2416sub"
+username = ""
+password = ""
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
