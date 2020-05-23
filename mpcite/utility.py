@@ -89,13 +89,13 @@ class Origin(BaseModel):
 
 class BandStructure(BaseModel):
     band_gap: float
-    bs_task: str
+    bs_task: Union[str, None]
     cbm: Union[str, None]
-    dos_task: str
+    dos_task: Union[str, None]
     efermi: float
     is_gap_direct: bool
     is_metal: bool
-    uniform_task: str
+    uniform_task: Union[str, None]
     vbm: Union[str, None]
 
 

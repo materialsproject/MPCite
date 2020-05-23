@@ -98,7 +98,6 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
-        mp_id = "mp-22389"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         record: ELinkRecord = self.generate_posting_data(mp_id=mp_id)
         if record.osti_id is None or record.osti_id == '':
