@@ -4,7 +4,7 @@ from xmltodict import parse
 from xml.dom.minidom import parseString
 import logging
 
-elink_endpoint = "http://www.osti.gov/elinktest/2416api"
+elink_endpoint = "https://www.osti.gov/elinktest/2416api"
 username = ""
 password = ""
 
@@ -31,10 +31,10 @@ if __name__ == "__main__":
 
     r = post()
 
-    # print("**********************")
-    # print("Results from posting: ")
-    # print("status_code = ", r.status_code)
-    # import json
-    #
-    # print(f"content = {json.dumps(parse(r.content), indent=2)}")
-    # print("**********************")
+    print("**********************")
+    print("Results from posting: ")
+    print("status_code = ", r.status_code)
+    import json
+
+    print(f"content = {json.dumps(parse(r.content), indent=2)}")
+    print("**********************")
