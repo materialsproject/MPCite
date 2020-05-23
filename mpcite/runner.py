@@ -1,6 +1,5 @@
 from adapter import OstiMongoAdapter
 from doi_builder import DoiBuilder
-from record import OstiRecord
 import logging, yaml
 from pathlib import Path
 import os

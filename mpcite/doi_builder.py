@@ -3,11 +3,11 @@ from dicttoxml import dicttoxml
 from xmltodict import parse
 from maggma.core.builder import Builder
 from adapter import OstiMongoAdapter
-from typing import Iterable, List, Union, Tuple
-from utility import OSTI, ELinkRecord, DOICollectionRecord, RoboCrys
-from materials_model import Material
+from typing import Iterable, List, Union, Tuple, Dict
+from utility import OSTI, ELinkRecord, DOICollectionRecord, RoboCrys, Material, ELinkResponseRecord, ElinkResponseStatus
 from pybtex.database.input import bibtex
-
+import json
+from xml.dom.minidom import parseString
 
 class DoiBuilder(Builder):
     """
@@ -115,12 +115,20 @@ class DoiBuilder(Builder):
         """
         self.logger.debug(f"Updating/registering {len(items)} items")
         xml_items_to_send: bytes = self.prep_posting_data(items)
-        self.post_data_to_elink(data=xml_items_to_send)
+        response:requests.Response = self.post_data_to_elink(data=xml_items_to_send)
+
+        if response.status_code != 200:
+            self.logger.error("POST request failed")
+        else:
+            self.update_doi_collection(parse(response.content))
+
         # TODO with updated info returned by E-Link, update DOI Collection
+
 
     """
     Utility functions
     """
+
 
     class MaterialNotFound(Exception):
         pass
@@ -160,25 +168,16 @@ class DoiBuilder(Builder):
 
         return elink_record
 
-    def post_data_to_elink(self, data):
+    def post_data_to_elink(self, data) -> requests.Response:
         """
         Send data to elink
         :param data: data to post, list of xml data
         :return:
         """
         auth = (self.osti.elink.username, self.osti.elink.password)
-        print("**********************")
-        print("Posting the following data: ")
-        print(data)
-        print("**********************")
         r = requests.post(self.osti.elink.endpoint, auth=auth, data=data)
-        print("**********************")
-        print("status_code = ", r.status_code)
-        import json
-        print(f"content = {json.dumps(parse(r.content), indent=2)}")
-        # wait, wtf, it is giving me "The service will respond with a summary of the submissions",
-        # and also i cant find the record that i just submitted lol
-        print("**********************")
+        return r
+
 
     def get_bibtex(self, doi):
         """get bibtex string for single material/doi"""
@@ -317,6 +316,7 @@ class DoiBuilder(Builder):
             collection_record.doi = elink_record.osti_id
         if collection_record.get_status() != elink_record.doi["@status"]:
             to_update = True
+            self.logger.debug(f"status update for {collection_record.task_id} to {elink_record.doi['@status']}")
             collection_record.set_status(elink_record.doi["@status"])
 
         if to_update:
@@ -346,7 +346,6 @@ class DoiBuilder(Builder):
         """
 
         xml = dicttoxml(items, custom_root='records', attr_type=False)
-        from xml.dom.minidom import parseString
         records_xml = parseString(xml)
         items = records_xml.getElementsByTagName('item')
         for item in items:
@@ -359,4 +358,28 @@ class DoiBuilder(Builder):
         # for item in items:
         #     xml_items_to_send.renameNode(item, '', item.parentNode.nodeName[:-1])
         # return xml_items_to_send
+
+    def update_doi_collection(self, data: Dict[str, Dict[str, ELinkResponseRecord]]):
+        """
+        update DOI collection
+
+        :param data: dictionary of "records" -> {"record", ELinkResponseRecord}
+        :return:
+            None
+        """
+        successful_elink_responses: List[ELinkResponseRecord] = []
+        for _, elink_response_record in data["records"].items():
+            elink_response_record = ELinkResponseRecord.parse_obj(elink_response_record)
+            if elink_response_record.status == ElinkResponseStatus.FAILED:
+                self.logger.debug(f"POST for {elink_response_record.accession_num} failed")
+            else:
+                self.logger.debug(f"POST for {elink_response_record.accession_num} succeeded")
+                successful_elink_responses.append(elink_response_record)
+
+        to_update: List[dict] = [DOICollectionRecord.from_elink_response_record(u).dict()
+                                 for u in successful_elink_responses]
+        for u in to_update:
+            self.logger.info(f"Updating {u['task_id']} in DOI collection")
+        self.adapter.doi_store.update(docs=to_update, key=self.adapter.doi_store.key)
+
 
