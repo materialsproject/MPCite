@@ -99,7 +99,7 @@ class BandStructure(BaseModel):
     vbm: Union[str, None]
 
 
-class Material(BaseModel):
+class MaterialModel(BaseModel):
     last_updated: datetime = Field(None, title="timestamp for the most recent calculation")
     created_at: datetime = Field(None,
                                  title="creation time for this material defined by when the first structure optimization calculation was run", )
@@ -160,7 +160,7 @@ class ELinkRecord(BaseModel):
     doi: dict = Field({}, title="DOI info", description="Mainly used during GET request")
 
     @classmethod
-    def get_title(cls, material: Material):
+    def get_title(cls, material: MaterialModel):
         formula = material.formula_pretty
         return 'Materials Data on %s by Materials Project' % formula
 
@@ -202,15 +202,16 @@ class ELinkResponseRecord(BaseModel):
 
 class ElinkResponseStatus:
     SUCCESS = "SUCCESS"
-    FAILED = "FAILED"
+    FAILED = "FAILURE"
 
 
 class DOICollectionRecord(BaseModel):
-    task_id: str = Field(...)
+    material_id: str = Field(...)
     doi: str = Field(default='')
     bibtex: Union[str, None] = Field(...)
     status: str = Field(...)
     valid: bool = Field(False)
+    last_updated: datetime = Field(default=datetime.now())
 
     def get_status(self):
         return self.status
@@ -226,10 +227,72 @@ class DOICollectionRecord(BaseModel):
 
     @classmethod
     def from_elink_response_record(cls, elink_response_record: ELinkResponseRecord):
-        doi_collection_record = DOICollectionRecord(task_id=elink_response_record.accession_num,
+        doi_collection_record = DOICollectionRecord(material_id=elink_response_record.accession_num,
                                                     doi=elink_response_record.doi["#text"],
                                                     status=elink_response_record.doi["@status"],
                                                     bibtex=None,
                                                     valid=True)
         doi_collection_record.set_status(status=elink_response_record.doi["@status"])
         return doi_collection_record
+
+
+class ElsevierPOSTContainerModel(BaseModel):
+    identifier: str = Field(default="", title="mp_id")
+    source: str = Field(default="https://materialsproject.org")
+    date: str = Field(default=datetime.now().__str__())
+    title: str = Field(...)
+    description: str = Field(default="")
+    doi: str = Field(...)
+    authors: List[str] = Field(default=[])
+    url: str = Field(...)
+    type: str = Field(default='SM')
+    dateAvailable: str = Field(default=datetime.now().__str__())
+    dateCreated: str = Field(default=datetime.now().__str__())
+    version: str = Field(default="0.0.1")
+    funding: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
+    language: str = Field(default="en")
+    method: str = Field(default="Materials Project")
+    accessRights: str = Field(default="Public")
+    contact: str = Field('Kristin Persson <kapersson@lbl.gov>')
+    dataStandard: str = Field(default="https://materialsproject.org/citing")
+    howToCite: str = Field(default="https://materialsproject.org/citing")
+    subjectAreas: str = Field(default="36 MATERIALS SCIENCE")
+    keywords: str = Field(...)
+    institutions: str = Field(default="Lawrence Berkeley National Laboratory")
+    institutionIds: str = Field(default="AC02-05CH11231; EDCBEE")
+    spatialCoverage: str = Field(default="")
+    temporalCoverage: str = Field(default="")
+    references: str = Field(default="https://materialsproject.org/citin")
+    relatedResources: str = Field(default="https://materialsproject.org/citing")
+    location: str = Field("1 Cyclotron Rd, Berkeley, CA 94720")
+    childContainerIds: str = Field(default="")
+
+    @classmethod
+    def get_url(cls, mp_id):
+        return 'https://materialsproject.org/materials/%s' % mp_id
+
+    @classmethod
+    def get_keywords(cls, material):
+        keywords = '; '.join(['crystal structure', material.formula_pretty, material.chemsys])
+        keywords += '; electronic bandstructure' if material.bandstructure is not None else ''
+        return keywords
+
+    @classmethod
+    def get_default_description(cls):
+        return 'Computed materials data using density ' \
+               'functional theory calculations. These calculations determine ' \
+               'the electronic structure of bulk materials by solving ' \
+               'approximations to the Schrodinger equation. For more ' \
+               'information, see https://materialsproject.org/docs/calculations'
+
+    @classmethod
+    def get_date_created(cls, material: MaterialModel) -> str:
+        return material.created_at.__str__()
+
+    @classmethod
+    def get_date_available(cls, material: MaterialModel) -> str:
+        return material.created_at.__str__()
+
+    @classmethod
+    def get_title(cls, material: MaterialModel) -> str:
+        return material.formula_pretty

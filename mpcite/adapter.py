@@ -14,18 +14,16 @@ logger = logging.getLogger('mpcite')
 
 class OstiMongoAdapter(object):
     """adapter to connect to materials database and collection"""
-    def __init__(self, materials_store: Store, dois_store: Store, robocrys_store: Store, duplicates):
+    def __init__(self, materials_store: Store, dois_store: Store, robocrys_store: Store):
         """
 
         :param materials_store: represent a connection to the materials store
         :param dois_store: represent a connection to the dois store
         :param robocrys_store: represent a connection to the robocrys store
-        :param duplicates: idk yet
         """
         self.materials_store: Store = materials_store
         self.doi_store: Store = dois_store
         self.robocrys_store: Store = robocrys_store
-        self.duplicates = duplicates
 
     @classmethod
     def from_config(cls, config):
@@ -44,13 +42,12 @@ class OstiMongoAdapter(object):
 
         logger.debug(f'using DB from {materials_store.name, dois_store.name, robocrys_store.name}')
 
-        duplicates_file = os.path.expandvars(config.duplicates_file)
-        duplicates = loadfn(duplicates_file) if os.path.exists(duplicates_file) else {}
+        # duplicates_file = os.path.expandvars(config.duplicates_file)
+        # duplicates = loadfn(duplicates_file) if os.path.exists(duplicates_file) else {}
 
         return OstiMongoAdapter(materials_store=materials_store,
                                 dois_store=dois_store,
-                                robocrys_store=robocrys_store,
-                                duplicates=duplicates)
+                                robocrys_store=robocrys_store)
 
     @classmethod
     def _create_mongostore(cls, config, config_collection_name: str) -> MongoStore:
