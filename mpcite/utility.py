@@ -1,298 +1,114 @@
-from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Union
-from enum import Enum
-from datetime import datetime
+from models import *
+from abc import abstractmethod, ABCMeta
+from typing import Union, List
+import logging
+import requests
+from urllib3.exceptions import HTTPError
+from xmltodict import parse
+from dicttoxml import dicttoxml
+from xml.dom.minidom import parseString
 
 
-class DictAsMember(dict):
-    # http://stackoverflow.com/questions/10761779/when-to-use-getattr/10761899#10761899
-    def __getattr__(self, name):
-        value = self[name]
-        if isinstance(value, dict):
-            value = DictAsMember(value)
-        return value
+class Adapter(metaclass=ABCMeta):
+    def __init__(self, config: ConnectionModel):
+        self.config = config
+        logging.getLogger("urllib3").setLevel(logging.ERROR)  # forcefully disable logging from urllib3
+        logging.getLogger("dicttoxml").setLevel(logging.ERROR)  # forcefully disable logging from dicttoxml
+        self.logger = logging.getLogger(__name__)
+
+    @abstractmethod
+    def post(self, data):
+        pass
+
+    @abstractmethod
+    def get(self, params):
+        pass
 
 
-class Connection(BaseModel):
-    endpoint: str = Field(..., title="URL Endpoint of the connection")
-    username: str = Field(..., title="User Name")
-    password: str = Field(..., title="Password")
+class ELinkAdapter(Adapter):
+    INVALID_URL_STATUS_MESSAGE = "URL entered is invalid or unreachable."
 
-
-class OSTI(BaseModel):
-    elink: Connection = Field(..., title="Elink endpoint")
-    explorer: Connection = Field(..., title="Explorer endpoint")
-
-
-class RoboCrys(BaseModel):
-    material_id: str
-    last_updated: datetime
-    # condensed_structure
-    description: str
-
-
-class Lattice(BaseModel):
-    a: float = Field(..., title="*a* lattice parameter")
-    alpha: int = Field(..., title="Angle between a and b lattice vectors")
-    b: float = Field(..., title="b lattice parameter")
-    beta: int = Field(..., title="angle between a and c lattice vectors")
-    c: float = Field(..., title="c lattice parameter")
-    gamma: int = Field(..., title="angle between b and c lattice vectors")
-    volume: float = Field(..., title="lattice volume")
-    matrix: List[List[int]] = Field(..., title="matrix representation of this lattice")
-
-
-class Specie(BaseModel):
-    element: str = Field(..., title="element")
-    occu: float = Field(..., title="site occupancy")
-
-
-class Site(BaseModel):
-    abc: List[float] = Field(..., title="fractional coordinates")
-    label: str = None
-    species: List[Specie] = Field(..., title="species occupying this site")
-    xyz: List[float] = Field(..., title="cartesian coordinates")
-    properties: Dict[str, int] = Field(..., title="arbitrary property list")
-
-
-class Structure(BaseModel):
-    charge: Optional[float] = Field(None, title="site wide charge")
-    lattice: Lattice
-    sites: List[Site]
-
-
-class CrystalSystem(str, Enum):
-    tetragonal = "tetragonal"
-    triclinic = "triclinic"
-    orthorhombic = "orthorhombic"
-    monoclinic = "monoclinic"
-    hexagonal = "hexagonal"
-    cubic = "cubic"
-    trigonal = "trigonal"
-
-
-class Symmetry(BaseModel):
-    source: str
-    symbol: str
-    number: int
-    point_group: str
-    crystal_system: CrystalSystem
-    hall: str
-
-
-class Origin(BaseModel):
-    materials_key: str
-    task_type: str
-    task_id: str
-    last_updated: datetime
-
-
-class BandStructure(BaseModel):
-    band_gap: float
-    bs_task: Union[str, None]
-    cbm: Union[str, None]
-    dos_task: Union[str, None]
-    efermi: float
-    is_gap_direct: bool
-    is_metal: bool
-    uniform_task: Union[str, None]
-    vbm: Union[str, None]
-
-
-class MaterialModel(BaseModel):
-    last_updated: datetime = Field(None, title="timestamp for the most recent calculation")
-    created_at: datetime = Field(None,
-                                 title="creation time for this material defined by when the first structure optimization calculation was run", )
-    task_ids: List[str] = Field([], title="List of task ids that created this material")
-    task_id: str = Field('', title="task id for this material. Also called the material id")
-    origins: List[Origin]
-    task_types: Dict[str, str] = Field(dict())
-    bandstructure: Union[BandStructure, None] = Field(None)
-    energy: float
-    energy_per_atom: float
-    # entries
-    # initial_structures
-    # inputs
-    # magnetism
-    structure: Structure = Field(..., title="the structure object")
-    nsites: int
-    elements: List[str] = Field(..., title="list of elements")
-    nelements: int = Field(..., title="number of elements")
-    composition: Dict[str, int] = Field(
-        dict(), title="composition as a dictionary of elements and their amount"
-    )
-    composition_reduced: Dict[str, int] = Field(
-        dict(), title="reduced composition as a dictionary of elements and their amount"
-    )
-    formula_pretty: str = Field(..., title="clean representation of the formula")
-    formula_anonymous: str = Field(..., title="formula using anonymized elements")
-    chemsys: str = Field('',
-                         title="chemical system as a string of elements in alphabetical order delineated by dashes", )
-    volume: float = Field(..., title="")
-    density: float = Field(..., title="mass density")
-    symmetry: Symmetry = Field(..., title="symmetry data for this")
-
-
-class ELinkRecord(BaseModel):
-    osti_id: Union[str, None] = Field(...)
-    dataset_type: str = Field(default='SM')
-    title: str = Field(...)
-    creators: str = Field(default='Kristin Persson')
-    product_nos: str = Field(..., title="MP id")
-    accession_num: str = Field(..., title="MP id")
-    contract_nos: str = Field('AC02-05CH11231; EDCBEE')
-    originating_research_org: str = Field(
-        default='Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)')
-    publication_date: str = Field(...)
-    language: str = Field(default='English')
-    country: str = Field(default='US')
-    sponsor_org: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
-    site_url: str = Field(...)
-    contact_name: str = Field(default='Kristin Persson')
-    contact_org: str = Field(default="LBNL")
-    contact_email: str = Field(default='kapersson@lbl.gov')
-    contact_phone: str = Field(default='+1(510)486-7218')
-    related_resource: str = Field('https://materialsproject.org/citing')
-    contributor_organizations: str = Field(default='MIT; UC Berkeley; Duke; U Louvain')
-    subject_categories_code: str = Field(default='36 MATERIALS SCIENCE')
-    keywords: str = Field(...)
-    description: str = Field(default="")
-    doi: dict = Field({}, title="DOI info", description="Mainly used during GET request")
-
-    @classmethod
-    def get_title(cls, material: MaterialModel):
-        formula = material.formula_pretty
-        return 'Materials Data on %s by Materials Project' % formula
-
-    @classmethod
-    def get_site_url(cls, mp_id):
-        return 'https://materialsproject.org/materials/%s' % mp_id
-
-    @classmethod
-    def get_keywords(cls, material):
-        # keywords = '; '.join(['crystal structure',
-        #                       material.formula_pretty,
-        #                       material.chemsys,
-        #                       '; '.join(['-'.join(['ICSD', str(iid)]) for iid in material['icsd_ids']]),
-        #                       ])
-        keywords = '; '.join(['crystal structure', material.formula_pretty, material.chemsys])
-        keywords += '; electronic bandstructure' if material.bandstructure is not None else ''
-        return keywords
-
-    @classmethod
-    def get_default_description(cls):
-        return 'Computed materials data using density ' \
-               'functional theory calculations. These calculations determine ' \
-               'the electronic structure of bulk materials by solving ' \
-               'approximations to the Schrodinger equation. For more ' \
-               'information, see https://materialsproject.org/docs/calculations'
-
-
-class ELinkResponseRecord(BaseModel):
-    osti_id: str
-    accession_num: str
-    product_nos: str
-    title: str
-    contract_nos: str
-    other_identifying_nos: Union[str, None]
-    doi: Dict[str, str]
-    status: str
-    status_message: Union[str, None]
-
-
-class ElinkResponseStatus:
-    SUCCESS = "SUCCESS"
-    FAILED = "FAILURE"
-
-
-class DOICollectionRecord(BaseModel):
-    material_id: str = Field(...)
-    doi: str = Field(default='')
-    bibtex: Union[str, None] = Field(...)
-    status: str = Field(...)
-    valid: bool = Field(False)
-    last_updated: datetime = Field(default=datetime.now())
-
-    def get_status(self):
-        return self.status
-
-    def set_status(self, status):
-        self.status = status
-
-    def get_osti_id(self):
-        if self.doi is None or self.doi == '':
-            return ''
+    def post(self, data: bytes) -> List[ELinkPostResponseModel]:
+        r = requests.post(self.config.endpoint, auth=(self.config.username, self.config.password), data=data)
+        if r.status_code != 200:
+            self.logger.error(f"POST for {data} failed")
+            raise HTTPError(f"POST for {data} failed")
         else:
-            return self.doi.split('/')[-1]
+            content: Dict[str, Dict[str, ELinkPostResponseModel]] = parse(r.content)
+            if content["records"] is None:
+                raise HTTPError(f"POST for {data} failed due to content['records'] is None")
+            to_return = []
+            for _, elink_responses in content["records"].items():
+                if type(elink_responses) == list:
+                    for elink_response in elink_responses:
+                        e = self.parse_obj_to_elink_post_response_model(elink_response)
+                        if e is not None:
+                            to_return.append(e)
+                else:
+                    e = self.parse_obj_to_elink_post_response_model(elink_responses)
+                    if e is not None:
+                        to_return.append(e)
+            return to_return
+
+    def parse_obj_to_elink_post_response_model(self, obj) -> Union[None, ELinkPostResponseModel]:
+        try:
+            elink_response_record = ELinkPostResponseModel.parse_obj(obj)
+            return elink_response_record
+        except Exception as e:
+            self.logger.error(f"Skipping. Error:{e}.\n Cannot Parse the received Elink Response: \n{elink_response} ")
+            return None
 
     @classmethod
-    def from_elink_response_record(cls, elink_response_record: ELinkResponseRecord):
-        doi_collection_record = DOICollectionRecord(material_id=elink_response_record.accession_num,
-                                                    doi=elink_response_record.doi["#text"],
-                                                    status=elink_response_record.doi["@status"],
-                                                    bibtex=None,
-                                                    valid=True)
-        doi_collection_record.set_status(status=elink_response_record.doi["@status"])
-        return doi_collection_record
+    def prep_posting_data(cls, items: List[dict]) -> bytes:
+        """
+        using dicttoxml and customized xml configuration to generate posting data according to Elink Specification
+        :param items: list of dictionary of data
+        :return:
+            xml data in bytes, ready to be sent via request module
+        """
+
+        xml = dicttoxml(items, custom_root='records', attr_type=False)
+        records_xml = parseString(xml)
+        items = records_xml.getElementsByTagName('item')
+        for item in items:
+            records_xml.renameNode(item, '', item.parentNode.nodeName[:-1])
+        return records_xml.toxml().encode('utf-8')
+
+    def get(self, mpid_or_ostiid: str) -> Union[None, ELinkGetResponseModel]:
+        key = 'site_unique_id' if 'mp-' in mpid_or_ostiid or 'mvc-' in mpid_or_ostiid else 'osti_id'
+        payload = {key: mpid_or_ostiid}
+        self.logger.debug('GET from {} w/i payload = {} ...'.format(self.config.endpoint, payload))
+        r = requests.get(self.config.endpoint, auth=(self.config.username, self.config.password), params=payload)
+        if r.status_code == 200:
+            elink_response_xml = r.content
+            return ELinkGetResponseModel.parse_obj(parse(elink_response_xml)["records"]["record"])
+        else:
+            msg = f"Error code from GET is {r.status_code}"
+            self.logger.error(msg)
+            raise HTTPError(msg)
+
+    def get_multiple(self, mpid_or_ostiids: List[str]) -> List[ELinkGetResponseModel]:
+        result: List[ELinkGetResponseModel] = []
+        for mpid_or_ostiid in mpid_or_ostiids:
+            try:
+                r = self.get(mpid_or_ostiid=mpid_or_ostiid)
+                result.append(r)
+            except HTTPError as e:
+                self.logger.error(f"Skipping [{mpid_or_ostiid}]. Error: {e}")
+        return result
+
+    def get_multiple_in_dict(self, mpid_or_ostiids: List[str]) -> Dict[str, ELinkGetResponseModel]:
+        return {r.accession_num: r for r in self.get_multiple(mpid_or_ostiids=mpid_or_ostiids)}
 
 
-class ElsevierPOSTContainerModel(BaseModel):
-    identifier: str = Field(default="", title="mp_id")
-    source: str = Field(default="https://materialsproject.org")
-    date: str = Field(default=datetime.now().__str__())
-    title: str = Field(...)
-    description: str = Field(default="")
-    doi: str = Field(...)
-    authors: List[str] = Field(default=[])
-    url: str = Field(...)
-    type: str = Field(default='SM')
-    dateAvailable: str = Field(default=datetime.now().__str__())
-    dateCreated: str = Field(default=datetime.now().__str__())
-    version: str = Field(default="0.0.1")
-    funding: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
-    language: str = Field(default="en")
-    method: str = Field(default="Materials Project")
-    accessRights: str = Field(default="Public")
-    contact: str = Field('Kristin Persson <kapersson@lbl.gov>')
-    dataStandard: str = Field(default="https://materialsproject.org/citing")
-    howToCite: str = Field(default="https://materialsproject.org/citing")
-    subjectAreas: str = Field(default="36 MATERIALS SCIENCE")
-    keywords: str = Field(...)
-    institutions: str = Field(default="Lawrence Berkeley National Laboratory")
-    institutionIds: str = Field(default="AC02-05CH11231; EDCBEE")
-    spatialCoverage: str = Field(default="")
-    temporalCoverage: str = Field(default="")
-    references: str = Field(default="https://materialsproject.org/citin")
-    relatedResources: str = Field(default="https://materialsproject.org/citing")
-    location: str = Field("1 Cyclotron Rd, Berkeley, CA 94720")
-    childContainerIds: str = Field(default="")
+class ExplorerAdapter(Adapter):
 
-    @classmethod
-    def get_url(cls, mp_id):
-        return 'https://materialsproject.org/materials/%s' % mp_id
+    def post(self, data):
+        pass
 
-    @classmethod
-    def get_keywords(cls, material):
-        keywords = '; '.join(['crystal structure', material.formula_pretty, material.chemsys])
-        keywords += '; electronic bandstructure' if material.bandstructure is not None else ''
-        return keywords
+    def get(self, params):
+        pass
 
-    @classmethod
-    def get_default_description(cls):
-        return 'Computed materials data using density ' \
-               'functional theory calculations. These calculations determine ' \
-               'the electronic structure of bulk materials by solving ' \
-               'approximations to the Schrodinger equation. For more ' \
-               'information, see https://materialsproject.org/docs/calculations'
 
-    @classmethod
-    def get_date_created(cls, material: MaterialModel) -> str:
-        return material.created_at.__str__()
-
-    @classmethod
-    def get_date_available(cls, material: MaterialModel) -> str:
-        return material.created_at.__str__()
-
-    @classmethod
-    def get_title(cls, material: MaterialModel) -> str:
-        return material.formula_pretty
+class ElviserAdapter:
+    pass
