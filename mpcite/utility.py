@@ -1,12 +1,13 @@
 from models import *
 from abc import abstractmethod, ABCMeta
-from typing import Union, List
+from typing import Union, List, Any
 import logging
 import requests
 from urllib3.exceptions import HTTPError
 from xmltodict import parse
 from dicttoxml import dicttoxml
 from xml.dom.minidom import parseString
+import json
 
 
 class Adapter(metaclass=ABCMeta):
@@ -75,6 +76,12 @@ class ELinkAdapter(Adapter):
         return records_xml.toxml().encode('utf-8')
 
     def get(self, mpid_or_ostiid: str) -> Union[None, ELinkGetResponseModel]:
+        """
+        get a single ELinkGetResponseModel from mpid
+        :param mpid_or_ostiid: mpid to query
+        :return:
+            ELinkGetResponseModel
+        """
         key = 'site_unique_id' if 'mp-' in mpid_or_ostiid or 'mvc-' in mpid_or_ostiid else 'osti_id'
         payload = {key: mpid_or_ostiid}
         self.logger.debug('GET from {} w/i payload = {} ...'.format(self.config.endpoint, payload))
@@ -88,6 +95,12 @@ class ELinkAdapter(Adapter):
             raise HTTPError(msg)
 
     def get_multiple(self, mpid_or_ostiids: List[str]) -> List[ELinkGetResponseModel]:
+        """
+        get a list of elink responses from mpid-s
+        :param mpid_or_ostiids: list of mpids
+        :return:
+            list of ELinkGetResponseModel
+        """
         result: List[ELinkGetResponseModel] = []
         for mpid_or_ostiid in mpid_or_ostiids:
             try:
@@ -97,8 +110,43 @@ class ELinkAdapter(Adapter):
                 self.logger.error(f"Skipping [{mpid_or_ostiid}]. Error: {e}")
         return result
 
-    def get_multiple_in_dict(self, mpid_or_ostiids: List[str]) -> Dict[str, ELinkGetResponseModel]:
-        return {r.accession_num: r for r in self.get_multiple(mpid_or_ostiids=mpid_or_ostiids)}
+    @classmethod
+    def list_to_dict(cls, responses: List[ELinkGetResponseModel]) -> Dict[str, ELinkGetResponseModel]:
+        """
+        helper method to turn a list of ELinkGetResponseModel to mapping of accession_num -> ELinkGetResponseModel
+
+        :return:
+            dictionary in the format of
+            {
+                accession_num : ELinkGetResponseModel
+            }
+        """
+        return {r.accession_num: r for r in responses}
+        # return {r.accession_num: r for r in self.get_multiple(mpid_or_ostiids=mpid_or_ostiids)}
+
+    def process_elink_post_responses(self, responses: List[ELinkPostResponseModel]) -> List[DOIRecordModel]:
+        """
+        find all doi record that needs to update
+        will generate a doi record if response.status = sucess. otherwise, print the error and do nothing about it
+        (elink will also do nothing about it)
+
+        :param responses: list of elink post responses to process
+        :return:
+            list of DOI records that require update
+        """
+        result: List[DOIRecordModel] = []
+        for response in responses:
+            if response.status == ElinkResponseStatusEnum.SUCCESS:
+                result.append(DOIRecordModel.from_elink_response_record(elink_response_record=response))
+            else:
+                # will provide more accurate prompt for known failures
+                if response.status_message == ELinkAdapter.INVALID_URL_STATUS_MESSAGE:
+                    self.logger.error(f"{[response.accession_num]} failed to update. "
+                                      f"Error: {response.status_message}"
+                                      f"Please double check whether this material actually exist "
+                                      f"on the website "
+                                      f"[{ELinkGetResponseModel.get_site_url(mp_id=response.accession_num)}]")
+        return result
 
 
 class ExplorerAdapter(Adapter):
@@ -106,9 +154,18 @@ class ExplorerAdapter(Adapter):
     def post(self, data):
         pass
 
-    def get(self, params):
+    def get(self, osti_id: str) -> Any:
+        r = requests.get(url=self.config.endpoint + "/" + osti_id, auth=(self.config.username, self.config.password))
+        if r.status_code == 200:
+            content = json.loads(r.content) # check if osti_id does not return anything what would happen
+            return
+        else:
+            raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
+
+
+class ElviserAdapter(Adapter):
+    def post(self, data):
         pass
 
-
-class ElviserAdapter:
-    pass
+    def get(self, params):
+        pass

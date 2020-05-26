@@ -24,6 +24,13 @@ class DoiBuilder(Builder):
 
     if it finds one of the uncited_materials in OSTI, it will update the *dois* collection
 
+    From a high level, this Builder works as follows:
+    1. get_items -> get all the records that require registration / update
+    2. process_item -> compute the update to one particular data from get_items
+    3. update_targets -> batch update DOI collection and update remote services
+
+    Please note that the default run() function ties the above three functions together
+
     """
 
     def __init__(self, adapter: OstiMongoAdapter, osti: OSTIModel, send_size=1000, sync=True, **kwargs):
@@ -36,6 +43,8 @@ class DoiBuilder(Builder):
         establish connection with ELink to submit info
 
         establish connection with osti explorer to get bibtex
+
+
         :param adapter: OstiMongoAdapter that keeps track of materials, doi, and other related stores
         :param osti: osti connection specification
         :param send_size: the maximum send size that E-Link allows
@@ -106,7 +115,6 @@ class DoiBuilder(Builder):
         mp_id = item
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
-            # doi_record = self.generate_doi_record_model(mp_id)
             elink_post_record = self.generate_elink_model(mp_id)
             return {"elink_post_record": elink_post_record}
         except Exception as e:
@@ -146,19 +154,8 @@ class DoiBuilder(Builder):
         try:
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
-            to_update: List[DOIRecordModel] = []
-            # find all doi record that needs to update
-            for response in elink_post_responses:
-                if response.status == ElinkResponseStatusEnum.SUCCESS:
-                    to_update.append(DOIRecordModel.from_elink_response_record(elink_response_record=response))
-                else:
-                    # will provide more accurate prompt for known failures
-                    if response.status_message == ELinkAdapter.INVALID_URL_STATUS_MESSAGE:
-                        self.logger.error(f"{[response.accession_num]} failed to update. "
-                                          f"Error: {response.status_message}"
-                                          f"Please double check whether this material actually exist "
-                                          f"on the website "
-                                          f"[{ELinkGetResponseModel.get_site_url(mp_id=response.accession_num)}]")
+            to_update: List[DOIRecordModel] = self.elink_adapter.process_elink_post_responses(responses=
+                                                                                              elink_post_responses)
 
             # update doi collection
             self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
@@ -174,25 +171,9 @@ class DoiBuilder(Builder):
     class MaterialNotFound(Exception):
         pass
 
-    def _get_osti_id_for_update(self, mp_id) -> str:
-        """
-        Used to determine if an update is necessary.
-
-        If '' is returned, implies update is not necessary.
-
-        Otherwise, an update is necessary
-        :param mp_id:
-        :return:
-        """
-        doi_entry = self.adapter.doi_store.query_one(criteria={self.adapter.doi_store.key: mp_id})
-        if doi_entry is None:
-            return ''
-        else:
-            return doi_entry['doi'].split('/')[-1]
-
     def find_new_materials(self) -> List[str]:
         """
-        find new materials to add by computing the difference between the MP and DOI collection
+        find new materials to add by computing the difference between the MP and DOI collection keys
 
         :return:
             list of mp_id
@@ -213,11 +194,15 @@ class DoiBuilder(Builder):
         :return:
             None
         """
+        # find distinct mp_ids that are currently in the doi collection
         all_keys = self.adapter.doi_store.distinct(field=self.adapter.doi_store.key)
         self.logger.info(f"Syncing {len(all_keys)} DOIs")
-        elink_records_dict: Dict[str, ELinkGetResponseModel] = self.elink_adapter.get_multiple_in_dict(mpid_or_ostiids=
-                                                                                                       all_keys)
 
+        # ask elink if it has those DOI records
+        elink_records_dict: Dict[str, ELinkGetResponseModel] = ELinkAdapter.list_to_dict(
+            self.elink_adapter.get_multiple(mpid_or_ostiids=all_keys))
+
+        # find all DOIs that are currently in the DOI collection
         doi_records: List[DOIRecordModel] = \
             [DOIRecordModel.parse_obj(i)
              for i in self.adapter.doi_store.query(criteria={self.adapter.doi_store.key: {"$in": all_keys}})]
@@ -225,49 +210,32 @@ class DoiBuilder(Builder):
         to_update: List[DOIRecordModel] = []
         to_delete: List[DOIRecordModel] = []
 
+        # for each doi in the DOI collection, check if it exist in elink
         for doi_record in doi_records:
             if doi_record.material_id not in elink_records_dict:
+                # if a DOI entry is in DOI collection, but not in Elink, add it to the delete list
                 to_delete.append(doi_record)
-            elif doi_record.update(elink_records_dict[doi_record.material_id], logger=self.logger):
+            elif doi_record.should_update(elink_records_dict[doi_record.material_id], logger=self.logger):
+                # if a DOI entry needs to updated, add it to the update list. Please note that should_update will
+                # only update the DOI entry stored in memory, still need to update the actual DOI entry in database
                 to_update.append(doi_record)
 
         self.logger.debug(f"Updating {len(to_update)} records because E-Link record does not match DOI Collection")
         self.logger.debug(f"Deleting {len(to_delete)} records because they are in DOI collection but not in E-Link")
 
+        # send database query for actual updates/deletions
         self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
         self.adapter.doi_store.remove_docs(criteria=
                                            {self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
 
-    def check_update(self, doi_record: DOIRecordModel, elink_record: ELinkGetResponseModel) -> bool:
-        to_update = False
-        if doi_record.get_osti_id() != elink_record.osti_id:
-            to_update = True
-            msg = f"DOI record mismatch for mp_id = {doi_record.material_id}. " \
-                  f"Overwriting the one in DOI collection to match OSTI"
-            self.logger.error(msg)
-            doi_record.doi = elink_record.osti_id
-        if doi_record.get_status() != elink_record.doi["@status"]:
-            to_update = True
-            self.logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
-            doi_record.set_status(elink_record.doi["@status"])
-        return to_update
-
-    def get_material_description(self, mp_id: str) -> str:
-        """
-        find materials description from robocrys database, if not found return the default description
-
-        :param mp_id: mp_id to query for in the robocrys database
-        :return:
-            description in string
-        """
-        robo_result = self.adapter.robocrys_store.query_one(criteria={self.adapter.robocrys_store.key: mp_id})
-        if robo_result is None:
-            return ELinkGetResponseModel.get_default_description()
-        else:
-            robo_result = RoboCrysModel.parse_obj(robo_result)
-            return robo_result.description
-
     def generate_elink_model(self, mp_id: str) -> ELinkGetResponseModel:
+        """
+        Generate ELink Get model by mp_id
+
+        :param mp_id: material id of the Elink model trying to generate
+        :return:
+            instance of ELinkGetResponseModel
+        """
         material = self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id})
         if material is None:
             msg = f"Material {mp_id} is not found in the materials store"
@@ -276,14 +244,14 @@ class DoiBuilder(Builder):
         else:
             material = MaterialModel.parse_obj(material)
 
-        elink_record = ELinkGetResponseModel(osti_id=self._get_osti_id_for_update(mp_id=mp_id),
+        elink_record = ELinkGetResponseModel(osti_id=self.adapter.get_osti_id(mp_id=mp_id),
                                              title=ELinkGetResponseModel.get_title(material=material),
                                              product_nos=mp_id,
                                              accession_num=mp_id,
                                              publication_date=material.last_updated.strftime('%m/%d/%Y'),
                                              site_url=ELinkGetResponseModel.get_site_url(mp_id=mp_id),
                                              keywords=ELinkGetResponseModel.get_keywords(material=material),
-                                             description=self.get_material_description(mp_id)
+                                             description=self.adapter.get_material_description(mp_id)
                                              )
         return elink_record
 

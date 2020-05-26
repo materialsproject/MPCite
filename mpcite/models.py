@@ -5,6 +5,7 @@ from datetime import datetime
 
 from enum import Enum
 
+
 class ConnectionModel(BaseModel):
     endpoint: str = Field(..., title="URL Endpoint of the connection")
     username: str = Field(..., title="User Name")
@@ -234,7 +235,7 @@ class DOIRecordModel(BaseModel):
         doi_collection_record.set_status(status=elink_response_record.doi["@status"])
         return doi_collection_record
 
-    def update(self, elink_record: ELinkGetResponseModel, logger) -> bool:
+    def should_update(self, elink_record: ELinkGetResponseModel, logger) -> bool:
         """
         Update the DOI entry based on the input ELinkGetResponseModel
         :param logger: logger for debugging purpose,
@@ -256,18 +257,19 @@ class DOIRecordModel(BaseModel):
             self.set_status(elink_record.doi["@status"])
         return to_update
 
+
 class ElsevierPOSTContainerModel(BaseModel):
     identifier: str = Field(default="", title="mp_id")
     source: str = Field(default="https://materialsproject.org")
-    date: str = Field(default=datetime.now().__str__())
+    date: str = Field(default=datetime.now().date().isoformat().__str__())
     title: str = Field(...)
     description: str = Field(default="")
     doi: str = Field(...)
-    authors: List[str] = Field(default=[])
+    authors: List[str] = Field(default=['Kristin Persson'])
     url: str = Field(...)
-    type: str = Field(default='SM')
-    dateAvailable: str = Field(default=datetime.now().__str__())
-    dateCreated: str = Field(default=datetime.now().__str__())
+    type: str = Field(default='dataset')
+    dateAvailable: str = Field(default= datetime.now().date().isoformat().__str__())
+    dateCreated: str = Field(default=datetime.now().date().isoformat().__str__())
     version: str = Field(default="0.0.1")
     funding: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
     language: str = Field(default="en")
@@ -276,26 +278,27 @@ class ElsevierPOSTContainerModel(BaseModel):
     contact: str = Field('Kristin Persson <kapersson@lbl.gov>')
     dataStandard: str = Field(default="https://materialsproject.org/citing")
     howToCite: str = Field(default="https://materialsproject.org/citing")
-    subjectAreas: str = Field(default="36 MATERIALS SCIENCE")
-    keywords: str = Field(...)
-    institutions: str = Field(default="Lawrence Berkeley National Laboratory")
-    institutionIds: str = Field(default="AC02-05CH11231; EDCBEE")
-    spatialCoverage: str = Field(default="")
-    temporalCoverage: str = Field(default="")
-    references: str = Field(default="https://materialsproject.org/citin")
-    relatedResources: str = Field(default="https://materialsproject.org/citing")
+    subjectAreas: List[str] = Field(default=["36 MATERIALS SCIENCE"])
+    keywords: List[str] = Field(...)
+    institutions: List[str] = Field(default=["Lawrence Berkeley National Laboratory"])
+    institutionIds: List[str] = Field(default=["AC02-05CH11231; EDCBEE"])
+    spatialCoverage: List[str] = Field(default=[])
+    temporalCoverage: List[str] = Field(default=[])
+    references: List[str] = Field(default=["https://materialsproject.org/citing"])
+    relatedResources: List[str] = Field(default=["https://materialsproject.org/citing"])
     location: str = Field("1 Cyclotron Rd, Berkeley, CA 94720")
-    childContainerIds: str = Field(default="")
+    childContainerIds: List[str] = Field(default=[])
 
     @classmethod
     def get_url(cls, mp_id):
         return 'https://materialsproject.org/materials/%s' % mp_id
 
     @classmethod
-    def get_keywords(cls, material):
-        keywords = '; '.join(['crystal structure', material.formula_pretty, material.chemsys])
-        keywords += '; electronic bandstructure' if material.bandstructure is not None else ''
-        return keywords
+    def get_keywords(cls, material:MaterialModel):
+        if material.bandstructure is not None:
+            return ['crystal structure', material.formula_pretty, material.chemsys, 'electronic bandstructure']
+        else:
+            return ['crystal structure', material.formula_pretty, material.chemsys]
 
     @classmethod
     def get_default_description(cls):
@@ -316,3 +319,27 @@ class ElsevierPOSTContainerModel(BaseModel):
     @classmethod
     def get_title(cls, material: MaterialModel) -> str:
         return material.formula_pretty
+
+
+class ExplorerGetResponseModel(BaseModel):
+    osti_id: str
+    title: str
+    report_number: str
+    doi: str
+    product_type: str
+    language: str
+    country_publication: str
+    description: str
+    site_ownership_code: str
+    publication_date: str
+    entry_date: str
+    contributing_organizations: str
+    authors: List[str]
+    subjects: List[str]
+    contributing_org: str
+    doe_contract_number: str
+    sponsor_orgs: List[str]
+    research_orgs: List[str]
+    links: List[Dict[str, str]]
+
+

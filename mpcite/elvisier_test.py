@@ -1,15 +1,20 @@
 import requests
 import json
+from datetime import datetime
 
-from utility import ElsevierPOSTContainerModel, MaterialModel
+from utility import ElsevierPOSTContainerModel
 
 elvisier = ElsevierPOSTContainerModel(identifier="mp-10074",
-                                      source="https://materialsproject.org",
+                                      source="osti.lbnl",
                                       title="GeSe2",
                                       doi="10.17188/1185101",
                                       url="https://materialsproject.org/materials/mp-10074",
-                                      keywords="crystal structure; GeSe2; Ge-Se; electronic bandstructure")
+                                      keywords=['crystal structure'],
+                                      date="2011-05-28",
+                                      dateCreated="2011-05-28",
+                                      dateAvailable="2020-05-04")
 
+# print(datetime.now().isoformat().__str__())
 print("********** data being posted ***************")
 print(json.dumps(elvisier.dict(), indent=2))
 headers = {"x-api-key": ""}

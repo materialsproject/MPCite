@@ -5,8 +5,8 @@ from xml.dom.minidom import parseString
 import logging
 
 elink_endpoint = "https://www.osti.gov/elinktest/2416api"
-username = "materials2416websvs"
-password = "Sti!2416sub"
+username = ""
+password = ""
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -19,7 +19,7 @@ data = b'<?xml version="1.0" ?><records><record><dataset_type>SM</dataset_type><
 
 def post():
     logging.debug("POSTING")
-    r = requests.post(elink_endpoint, auth=(username, password), data=data)
+    r = requests.post(elink_endpoint, auth=(username, password))
     return r
 
 
