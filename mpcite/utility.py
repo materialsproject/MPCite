@@ -30,6 +30,7 @@ class ELinkAdapter(Adapter):
     INVALID_URL_STATUS_MESSAGE = "URL entered is invalid or unreachable."
 
     def post(self, data: bytes) -> List[ELinkPostResponseModel]:
+        print(data)
         r = requests.post(self.config.endpoint, auth=(self.config.username, self.config.password), data=data)
         if r.status_code != 200:
             self.logger.error(f"POST for {data} failed")
@@ -56,7 +57,7 @@ class ELinkAdapter(Adapter):
             elink_response_record = ELinkPostResponseModel.parse_obj(obj)
             return elink_response_record
         except Exception as e:
-            self.logger.error(f"Skipping. Error:{e}.\n Cannot Parse the received Elink Response: \n{elink_response} ")
+            self.logger.error(f"Skipping. Error:{e}.\n Cannot Parse the received Elink Response: \n{obj} ")
             return None
 
     @classmethod

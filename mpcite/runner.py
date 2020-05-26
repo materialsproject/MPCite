@@ -16,7 +16,7 @@ explorer = ConnectionModel.parse_obj(config["osti"]["explorer"])
 osti = OSTIModel(elink=elink, explorer=explorer)
 
 # decalre builder instance
-send_size = 2
+send_size = 1
 bld = DoiBuilder(oma, osti, send_size=send_size, sync=False)
 
 # run program

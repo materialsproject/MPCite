@@ -113,6 +113,7 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
+        mp_id="mp-1237770"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
             elink_post_record = self.generate_elink_model(mp_id)
