@@ -1,8 +1,10 @@
+import logging
+import os
+import yaml
+from pathlib import Path
+
 from adapter import OstiMongoAdapter
 from doi_builder import DoiBuilder
-import logging, yaml
-from pathlib import Path
-import os
 from models import ConnectionModel, OSTIModel
 
 # configuration stuff
@@ -17,7 +19,7 @@ osti = OSTIModel(elink=elink, explorer=explorer)
 
 # decalre builder instance
 send_size = 1
-bld = DoiBuilder(oma, osti, send_size=send_size, sync=False)
+bld = DoiBuilder(oma, osti, send_size=send_size, sync=True)
 
 # run program
 bld.run(log_level=logging.DEBUG)

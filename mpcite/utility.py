@@ -1,6 +1,7 @@
-from models import *
+from models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
+    ExplorerGetJSONResponseModel, ElinkResponseStatusEnum
 from abc import abstractmethod, ABCMeta
-from typing import Union, List, Any
+from typing import Union, List, Dict
 import logging
 import requests
 from urllib3.exceptions import HTTPError
@@ -30,7 +31,6 @@ class ELinkAdapter(Adapter):
     INVALID_URL_STATUS_MESSAGE = "URL entered is invalid or unreachable."
 
     def post(self, data: bytes) -> List[ELinkPostResponseModel]:
-        print(data)
         r = requests.post(self.config.endpoint, auth=(self.config.username, self.config.password), data=data)
         if r.status_code != 200:
             self.logger.error(f"POST for {data} failed")
@@ -38,7 +38,7 @@ class ELinkAdapter(Adapter):
         else:
             content: Dict[str, Dict[str, ELinkPostResponseModel]] = parse(r.content)
             if content["records"] is None:
-                raise HTTPError(f"POST for {data} failed due to content['records'] is None")
+                raise HTTPError(f"POST for {data} failed because there's no data to post")
             to_return = []
             for _, elink_responses in content["records"].items():
                 if type(elink_responses) == list:
@@ -95,21 +95,23 @@ class ELinkAdapter(Adapter):
             self.logger.error(msg)
             raise HTTPError(msg)
 
-    def get_multiple(self, mpid_or_ostiids: List[str]) -> List[ELinkGetResponseModel]:
+    def get_multiple(self, mp_ids: List[str]) -> List[ELinkGetResponseModel]:
         """
         get a list of elink responses from mpid-s
-        :param mpid_or_ostiids: list of mpids
+        :param mp_ids: list of mpids
         :return:
             list of ELinkGetResponseModel
         """
-        result: List[ELinkGetResponseModel] = []
-        for mpid_or_ostiid in mpid_or_ostiids:
-            try:
-                r = self.get(mpid_or_ostiid=mpid_or_ostiid)
-                result.append(r)
-            except HTTPError as e:
-                self.logger.error(f"Skipping [{mpid_or_ostiid}]. Error: {e}")
-        return result
+        payload = {"accession_num": "(" + " ".join(mp_ids) + ")"}
+        r = requests.get(self.config.endpoint, auth=(self.config.username, self.config.password), params=payload)
+        if r.status_code == 200:
+            elink_response_xml = r.content
+            return [ELinkGetResponseModel.parse_obj(record) for record in
+                    parse(elink_response_xml)["records"]["record"]]
+        else:
+            msg = f"Error code from GET is {r.status_code} for {mp_ids}"
+            self.logger.error(msg)
+            raise HTTPError(msg)
 
     @classmethod
     def list_to_dict(cls, responses: List[ELinkGetResponseModel]) -> Dict[str, ELinkGetResponseModel]:
@@ -155,13 +157,34 @@ class ExplorerAdapter(Adapter):
     def post(self, data):
         pass
 
-    def get(self, osti_id: str) -> Any:
-        r = requests.get(url=self.config.endpoint + "/" + osti_id, auth=(self.config.username, self.config.password))
+    def get(self, osti_id: str) -> Union[ExplorerGetJSONResponseModel, None]:
+        payload = {"osti_id": osti_id}
+        r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password), params=payload)
         if r.status_code == 200:
-            content = json.loads(r.content) # check if osti_id does not return anything what would happen
-            return
+            if r.content == b'[]':
+                return None
+            else:
+                content = json.loads(r.content)[0]
+                return ExplorerGetJSONResponseModel.parse_obj(content)
         else:
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
+
+    def get_bibtex(self, osti_id: str) -> str:
+        payload = {"osti_id": osti_id}
+        header = {"Accept": "application/x-bibtex"}
+        r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password), params=payload,
+                         headers=header)
+        if r.status_code == 200:
+            return r.content.decode()
+        else:
+            raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
+
+    def append_bibtex(self, doi_record: DOIRecordModel):
+        if doi_record.get_osti_id() != '':
+            try:
+                doi_record.bibtex = self.get_bibtex(doi_record.get_osti_id())
+            except HTTPError as e:
+                self.logger.error(f"Cannot get bibtex for {doi_record.material_id}. Error: {e}")
 
 
 class ElviserAdapter(Adapter):

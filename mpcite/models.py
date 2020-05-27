@@ -321,7 +321,7 @@ class ElsevierPOSTContainerModel(BaseModel):
         return material.formula_pretty
 
 
-class ExplorerGetResponseModel(BaseModel):
+class ExplorerGetJSONResponseModel(BaseModel):
     osti_id: str
     title: str
     report_number: str
@@ -341,5 +341,6 @@ class ExplorerGetResponseModel(BaseModel):
     sponsor_orgs: List[str]
     research_orgs: List[str]
     links: List[Dict[str, str]]
+
 
 

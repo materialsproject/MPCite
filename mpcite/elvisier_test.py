@@ -17,7 +17,7 @@ elvisier = ElsevierPOSTContainerModel(identifier="mp-10074",
 # print(datetime.now().isoformat().__str__())
 print("********** data being posted ***************")
 print(json.dumps(elvisier.dict(), indent=2))
-headers = {"x-api-key": ""}
+headers = {"x-api-key": "gopvu7IDTs7zhBs5w5Ss11V7WiWyYOm44YfdggP4"}
 url = "https://push-feature.datasearch.elsevier.com/container"
 r = requests.post(url=url, data=json.dumps(elvisier.dict()), headers=headers)
 

@@ -1,13 +1,11 @@
-import logging, requests, pybtex, yaml, os, time
-from dicttoxml import dicttoxml
-from xmltodict import parse
 from maggma.core.builder import Builder
 from adapter import OstiMongoAdapter
-from typing import Iterable, List, Union, Dict
-from models import OSTIModel, ELinkGetResponseModel, DOIRecordModel, \
-    RoboCrysModel, MaterialModel, ELinkPostResponseModel
-from pybtex.database.input import bibtex
-from utility import *
+from typing import Iterable, List, Dict, Union
+from utility import ELinkAdapter, ExplorerAdapter
+from models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
+    ElsevierPOSTContainerModel
+import logging
+from urllib3.exceptions import HTTPError
 
 
 class DoiBuilder(Builder):
@@ -94,7 +92,7 @@ class DoiBuilder(Builder):
         total = len(overall)
         overall = overall[:self.send_size]
         # overall = to_update
-        self.logger.info(f"There are {total} materials that will be registered or updated. Due to bandwidth limit, "
+        self.logger.info(f"{total} materials needs registered or updated. Due to bandwidth limit, "
                          f"this run there will be updating the first {len(overall)} materials")
 
         return overall
@@ -113,11 +111,10 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
-        mp_id="mp-1237770"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
             elink_post_record = self.generate_elink_model(mp_id)
-            return {"elink_post_record": elink_post_record}
+            return {"elink_post_record": elink_post_record, "mp_id": mp_id}
         except Exception as e:
             self.logger.error(f"Skipping [{item}], Error: {e}")
 
@@ -142,7 +139,7 @@ class DoiBuilder(Builder):
         """
         self.logger.info(f"Start Updating/registering {len(items)} items")
         elink_post_data: List[dict] = []
-        elsevier_post_data: List[dict] = []
+        # elsevier_post_data: List[dict] = []
 
         # group them
         for item in items:
@@ -155,15 +152,17 @@ class DoiBuilder(Builder):
         try:
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
-            to_update: List[DOIRecordModel] = self.elink_adapter.process_elink_post_responses(responses=
-                                                                                              elink_post_responses)
+            to_update = self.elink_adapter.process_elink_post_responses(responses=elink_post_responses)
+
+            # add in bibtex
+            for u in to_update:
+                self.explorer_adapter.append_bibtex(u)
 
             # update doi collection
             self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
             self.logger.info(f"{len(to_update)} record(s) updated")
         except HTTPError as e:
             self.logger.error(f"Failed to POST, no updates done. Error: {e}")
-
 
     """
     Utility functions
@@ -199,9 +198,8 @@ class DoiBuilder(Builder):
         all_keys = self.adapter.doi_store.distinct(field=self.adapter.doi_store.key)
         self.logger.info(f"Syncing {len(all_keys)} DOIs")
 
-        # ask elink if it has those DOI records
-        elink_records_dict: Dict[str, ELinkGetResponseModel] = ELinkAdapter.list_to_dict(
-            self.elink_adapter.get_multiple(mpid_or_ostiids=all_keys))
+        # ask elink if it has those DOI records. create a mapping of mp_id -> elink_Record
+        elink_records_dict = ELinkAdapter.list_to_dict(self.elink_adapter.get_multiple(mp_ids=all_keys))
 
         # find all DOIs that are currently in the DOI collection
         doi_records: List[DOIRecordModel] = \
@@ -216,18 +214,19 @@ class DoiBuilder(Builder):
             if doi_record.material_id not in elink_records_dict:
                 # if a DOI entry is in DOI collection, but not in Elink, add it to the delete list
                 to_delete.append(doi_record)
+                pass
             elif doi_record.should_update(elink_records_dict[doi_record.material_id], logger=self.logger):
                 # if a DOI entry needs to updated, add it to the update list. Please note that should_update will
                 # only update the DOI entry stored in memory, still need to update the actual DOI entry in database
                 to_update.append(doi_record)
 
-        self.logger.debug(f"Updating {len(to_update)} records because E-Link record does not match DOI Collection")
-        self.logger.debug(f"Deleting {len(to_delete)} records because they are in DOI collection but not in E-Link")
+        self.logger.info(f"Updating {len(to_update)} records because E-Link record does not match DOI Collection")
+        self.logger.info(f"Deleting {len(to_delete)} records because they are in DOI collection but not in E-Link")
 
         # send database query for actual updates/deletions
         self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
-        self.adapter.doi_store.remove_docs(criteria=
-                                           {self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
+        self.adapter.doi_store.remove_docs(criteria={
+            self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
 
     def generate_elink_model(self, mp_id: str) -> ELinkGetResponseModel:
         """
@@ -255,4 +254,3 @@ class DoiBuilder(Builder):
                                              description=self.adapter.get_material_description(mp_id)
                                              )
         return elink_record
-
