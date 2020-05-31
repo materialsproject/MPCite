@@ -160,7 +160,7 @@ class DoiBuilder(Builder):
 
             # update doi collection
             self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
-            self.logger.info(f"{len(to_update)} record(s) updated")
+            self.logger.info(f"Attempted to update {len(to_update)} record(s)")
         except HTTPError as e:
             self.logger.error(f"Failed to POST, no updates done. Error: {e}")
 

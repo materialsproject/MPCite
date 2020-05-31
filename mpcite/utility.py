@@ -172,8 +172,11 @@ class ExplorerAdapter(Adapter):
     def get_bibtex(self, osti_id: str) -> str:
         payload = {"osti_id": osti_id}
         header = {"Accept": "application/x-bibtex"}
-        r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password), params=payload,
-                         headers=header)
+        try:
+            r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password), params=payload,
+                             headers=header)
+        except:
+            raise HTTPError(f"Failed to request for OSTI ID = {osti_id}")
         if r.status_code == 200:
             return r.content.decode()
         else:
