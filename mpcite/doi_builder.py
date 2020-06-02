@@ -95,7 +95,7 @@ class DoiBuilder(Builder):
         self.logger.info(f"{total} materials needs registered or updated. Due to bandwidth limit, "
                          f"this run there will be updating the first {len(overall)} materials")
 
-        return overall
+        return []
 
     def process_item(self, item: str) -> Union[None, dict]:
         """
@@ -111,6 +111,7 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
+        mp_id = "mp-10231"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
             elink_post_record = self.generate_elink_model(mp_id)
@@ -148,19 +149,23 @@ class DoiBuilder(Builder):
             if item.get("elsevier_post_record", None) is not None:
                 self.logger.debug("NOT IMPLEMENTED YET")
 
+
         # post it
         try:
+            failed_count = 0
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
             to_update = self.elink_adapter.process_elink_post_responses(responses=elink_post_responses)
-
-            # add in bibtex
+            failed_count += len(elink_post_data) - len(to_update)
+            # # add in bibtex
             for u in to_update:
-                self.explorer_adapter.append_bibtex(u)
+                status = self.explorer_adapter.append_bibtex(u)
+                failed_count += 1 if status is False else 0
 
             # update doi collection
             self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
-            self.logger.info(f"Attempted to update {len(to_update)} record(s)")
+            self.logger.info(f"Attempted to update / register [{len(to_update)}] record(s) "
+                             f"- [{len(to_update) - failed_count}] Succeeded - [{failed_count}] Failed")
         except HTTPError as e:
             self.logger.error(f"Failed to POST, no updates done. Error: {e}")
 
@@ -215,14 +220,18 @@ class DoiBuilder(Builder):
                 # if a DOI entry is in DOI collection, but not in Elink, add it to the delete list
                 to_delete.append(doi_record)
                 pass
-            elif doi_record.should_update(elink_records_dict[doi_record.material_id], logger=self.logger):
+            elif self.should_update(doi_record=doi_record,
+                                    elink_record=elink_records_dict[doi_record.material_id],
+                                    logger=self.logger,
+                                    explorer=self.explorer_adapter):
                 # if a DOI entry needs to updated, add it to the update list. Please note that should_update will
                 # only update the DOI entry stored in memory, still need to update the actual DOI entry in database
                 to_update.append(doi_record)
 
         self.logger.info(f"Updating {len(to_update)} records because E-Link record does not match DOI Collection")
+        self.logger.debug(f"Updating {[r.material_id for r in to_update]}")
         self.logger.info(f"Deleting {len(to_delete)} records because they are in DOI collection but not in E-Link")
-
+        self.logger.debug(f"Deleting {[r.material_id for r in to_delete]}")
         # send database query for actual updates/deletions
         self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
         self.adapter.doi_store.remove_docs(criteria={
@@ -254,3 +263,31 @@ class DoiBuilder(Builder):
                                              description=self.adapter.get_material_description(mp_id)
                                              )
         return elink_record
+
+    def should_update(self, doi_record:DOIRecordModel, elink_record: ELinkGetResponseModel, explorer: ExplorerAdapter, logger) -> bool:
+        """
+        Update the DOI entry based on the input ELinkGetResponseModel
+        :param doi_record:
+        :param explorer:
+        :param logger: logger for debugging purpose,
+        :param elink_record: elink record to compare against
+        :return:
+            True if this record is updated
+            False otherwise
+        """
+        to_update = False
+        bibtex = explorer.get_bibtex(doi_record.get_osti_id())
+        if doi_record.get_osti_id() != elink_record.osti_id:
+            to_update = True
+            msg = f"DOI record mismatch for mp_id = {doi_record.material_id}. " \
+                  f"Overwriting the one in DOI collection to match OSTI"
+            logger.error(msg)
+            doi_record.doi = elink_record.osti_id
+        if doi_record.get_status() != elink_record.doi["@status"]:
+            to_update = True
+            logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
+            doi_record.set_status(elink_record.doi["@status"])
+        if bibtex != doi_record.bibtex:
+            doi_record.bibtex = bibtex
+            to_update = True
+        return to_update

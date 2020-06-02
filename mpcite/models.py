@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Union
 from enum import Enum
 from datetime import datetime
-
 from enum import Enum
 
 
@@ -234,28 +233,6 @@ class DOIRecordModel(BaseModel):
                                                valid=True)
         doi_collection_record.set_status(status=elink_response_record.doi["@status"])
         return doi_collection_record
-
-    def should_update(self, elink_record: ELinkGetResponseModel, logger) -> bool:
-        """
-        Update the DOI entry based on the input ELinkGetResponseModel
-        :param logger: logger for debugging purpose,
-        :param elink_record: elink record to compare against
-        :return:
-            True if this record is updated
-            False otherwise
-        """
-        to_update = False
-        if self.get_osti_id() != elink_record.osti_id:
-            to_update = True
-            msg = f"DOI record mismatch for mp_id = {self.material_id}. " \
-                  f"Overwriting the one in DOI collection to match OSTI"
-            logger.error(msg)
-            self.doi = elink_record.osti_id
-        if self.get_status() != elink_record.doi["@status"]:
-            to_update = True
-            logger.debug(f"status update for {self.material_id} to {elink_record.doi['@status']}")
-            self.set_status(elink_record.doi["@status"])
-        return to_update
 
 
 class ElsevierPOSTContainerModel(BaseModel):

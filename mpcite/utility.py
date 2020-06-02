@@ -169,7 +169,7 @@ class ExplorerAdapter(Adapter):
         else:
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
 
-    def get_bibtex(self, osti_id: str) -> str:
+    def get_bibtex(self, osti_id: str) -> Union[str, None]:
         payload = {"osti_id": osti_id}
         header = {"Accept": "application/x-bibtex"}
         try:
@@ -178,16 +178,26 @@ class ExplorerAdapter(Adapter):
         except:
             raise HTTPError(f"Failed to request for OSTI ID = {osti_id}")
         if r.status_code == 200:
+            if r.content.decode() == '':
+                return None
             return r.content.decode()
         else:
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
 
-    def append_bibtex(self, doi_record: DOIRecordModel):
-        if doi_record.get_osti_id() != '':
+    def append_bibtex(self, doi_record: DOIRecordModel) -> bool:
+        """
+        find bibtex for a DOI record, return true if success, false otherwise
+        :param doi_record: DOI record to find bibtex
+        :return:
+            True if sucess, false otherwise
+        """
+        if doi_record.get_osti_id() != '' or doi_record.get_osti_id() is not None:
             try:
                 doi_record.bibtex = self.get_bibtex(doi_record.get_osti_id())
+                return True
             except HTTPError as e:
                 self.logger.error(f"Cannot get bibtex for {doi_record.material_id}. Error: {e}")
+                return False
 
 
 class ElviserAdapter(Adapter):
@@ -196,3 +206,5 @@ class ElviserAdapter(Adapter):
 
     def get(self, params):
         pass
+
+
