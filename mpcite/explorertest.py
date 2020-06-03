@@ -4,8 +4,8 @@ from models import ExplorerGetJSONResponseModel
 
 
 endpoint= "https://staging.osti.gov/dataexplorer/api/v1/records/" # DataCite Explorer API
-username= "demo" # user name for explorer.endpoint
-password= "letmein" # password for explorer.endpoint
+username= "demo"  # user name for explorer.endpoint
+password= "letmein"  # password for explorer.endpoint
 
 payload = {"osti_id":("1322654","1479789")}
 header = {"Accept":"application/x-bibtex"}

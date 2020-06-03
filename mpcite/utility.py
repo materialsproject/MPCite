@@ -31,6 +31,13 @@ class ELinkAdapter(Adapter):
     INVALID_URL_STATUS_MESSAGE = "URL entered is invalid or unreachable."
 
     def post(self, data: bytes) -> List[ELinkPostResponseModel]:
+        """
+        Post xml. The xml is assumed to be in the format that ELINK wants. Note that this xml may contain
+        multiple records, and therefore ELink may response with multiple objects
+        :param data: data to post
+        :return:
+            Elink Response.
+        """
         r = requests.post(self.config.endpoint, auth=(self.config.username, self.config.password), data=data)
         if r.status_code != 200:
             self.logger.error(f"POST for {data} failed")
@@ -53,6 +60,12 @@ class ELinkAdapter(Adapter):
             return to_return
 
     def parse_obj_to_elink_post_response_model(self, obj) -> Union[None, ELinkPostResponseModel]:
+        """
+        Parse a dictionary to ELink Post Response model, catch the error and log error, don't let it error out.
+        :param obj: Object to be parsed into ELinkPostResponseModel
+        :return:
+            None if cannot parse, instance of ElinkReponseModel if able to parse
+        """
         try:
             elink_response_record = ELinkPostResponseModel.parse_obj(obj)
             return elink_response_record
@@ -158,6 +171,11 @@ class ExplorerAdapter(Adapter):
         pass
 
     def get(self, osti_id: str) -> Union[ExplorerGetJSONResponseModel, None]:
+        """
+        Get Request for Explorer. Get a single item in JSON
+        :param osti_id:
+        :return:
+        """
         payload = {"osti_id": osti_id}
         r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password), params=payload)
         if r.status_code == 200:
@@ -170,6 +188,11 @@ class ExplorerAdapter(Adapter):
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
 
     def get_bibtex(self, osti_id: str) -> Union[str, None]:
+        """
+        GET request for Explorer, get bibtex
+        :param osti_id:
+        :return:
+        """
         payload = {"osti_id": osti_id}
         header = {"Accept": "application/x-bibtex"}
         try:

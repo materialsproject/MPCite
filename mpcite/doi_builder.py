@@ -6,6 +6,7 @@ from models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialMod
     ElsevierPOSTContainerModel
 import logging
 from urllib3.exceptions import HTTPError
+from datetime import datetime
 
 
 class DoiBuilder(Builder):
@@ -148,17 +149,17 @@ class DoiBuilder(Builder):
             if item.get("elsevier_post_record", None) is not None:
                 self.logger.debug("NOT IMPLEMENTED YET")
 
-
         # post it
         try:
             failed_count = 0
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
-            to_update = self.elink_adapter.process_elink_post_responses(responses=elink_post_responses)
+            to_update: List[DOIRecordModel] = self.elink_adapter.process_elink_post_responses(responses=
+                                                                                              elink_post_responses)
             failed_count += len(elink_post_data) - len(to_update)
             # # add in bibtex
-            for u in to_update:
-                status = self.explorer_adapter.append_bibtex(u)
+            for r in to_update:
+                status = self.explorer_adapter.append_bibtex(r)
                 failed_count += 1 if status is False else 0
 
             # update doi collection
@@ -215,16 +216,17 @@ class DoiBuilder(Builder):
 
         # for each doi in the DOI collection, check if it exist in elink
         for doi_record in doi_records:
+            doi_record.last_validated_on = datetime.now()
             if doi_record.material_id not in elink_records_dict:
                 # if a DOI entry is in DOI collection, but not in Elink, add it to the delete list
                 to_delete.append(doi_record)
                 pass
             elif self.should_update(doi_record=doi_record,
                                     elink_record=elink_records_dict[doi_record.material_id],
-                                    logger=self.logger,
                                     explorer=self.explorer_adapter):
                 # if a DOI entry needs to updated, add it to the update list. Please note that should_update will
                 # only update the DOI entry stored in memory, still need to update the actual DOI entry in database
+                doi_record.last_updated = datetime.now()
                 to_update.append(doi_record)
 
         self.logger.info(f"Updating {len(to_update)} records because E-Link record does not match DOI Collection")

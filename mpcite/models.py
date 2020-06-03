@@ -94,7 +94,8 @@ class BandStructure(BaseModel):
 class MaterialModel(BaseModel):
     last_updated: datetime = Field(None, title="timestamp for the most recent calculation")
     created_at: datetime = Field(None,
-                                 title="creation time for this material defined by when the first structure optimization calculation was run", )
+                                 description="creation time for this material defined by when the first structure "
+                                             "optimization calculation was run" )
     task_ids: List[str] = Field([], title="List of task ids that created this material")
     task_id: str = Field('', title="task id for this material. Also called the material id")
     origins: List[Origin]
@@ -211,6 +212,12 @@ class DOIRecordModel(BaseModel):
     status: str = Field(...)
     valid: bool = Field(False)
     last_updated: datetime = Field(default=datetime.now())
+    created_at: datetime = Field(default=datetime.now(),
+                                 title="DOI Created At",
+                                 description="creation time for this DOI record")
+    last_validated_on: datetime = Field(datetime=datetime.now(),
+                                        title="Date Last Validated",
+                                        description="Date that this data is last validated, not necessarily updated")
 
     def get_status(self):
         return self.status

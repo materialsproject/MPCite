@@ -94,6 +94,11 @@ class OstiMongoAdapter(object):
             return doi_entry['doi'].split('/')[-1]
 
     def clear_doi_store(self, criteria=None):
+        """
+        clears the DOI store
+        :param criteria:
+        :return:
+        """
         if criteria is None:
             criteria = {}
         self.doi_store.remove_docs(criteria=criteria)
