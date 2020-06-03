@@ -95,7 +95,7 @@ class DoiBuilder(Builder):
         self.logger.info(f"{total} materials needs registered or updated. Due to bandwidth limit, "
                          f"this run there will be updating the first {len(overall)} materials")
 
-        return []
+        return overall
 
     def process_item(self, item: str) -> Union[None, dict]:
         """
@@ -111,7 +111,6 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
-        mp_id = "mp-10231"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
             elink_post_record = self.generate_elink_model(mp_id)
@@ -264,30 +263,36 @@ class DoiBuilder(Builder):
                                              )
         return elink_record
 
-    def should_update(self, doi_record:DOIRecordModel, elink_record: ELinkGetResponseModel, explorer: ExplorerAdapter, logger) -> bool:
+    def should_update(self,
+                      doi_record:DOIRecordModel,
+                      elink_record: ELinkGetResponseModel,
+                      explorer: ExplorerAdapter) -> bool:
         """
         Update the DOI entry based on the input ELinkGetResponseModel
-        :param doi_record:
-        :param explorer:
-        :param logger: logger for debugging purpose,
+        :param doi_record: doi record to see if require an update
+        :param explorer: explorer connection
         :param elink_record: elink record to compare against
         :return:
             True if this record is updated
             False otherwise
         """
         to_update = False
-        bibtex = explorer.get_bibtex(doi_record.get_osti_id())
         if doi_record.get_osti_id() != elink_record.osti_id:
             to_update = True
             msg = f"DOI record mismatch for mp_id = {doi_record.material_id}. " \
                   f"Overwriting the one in DOI collection to match OSTI"
-            logger.error(msg)
+            self.logger.error(msg)
             doi_record.doi = elink_record.osti_id
         if doi_record.get_status() != elink_record.doi["@status"]:
             to_update = True
-            logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
+            self.logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
             doi_record.set_status(elink_record.doi["@status"])
-        if bibtex != doi_record.bibtex:
+        if to_update or doi_record.bibtex is None:
+            # update bibtex iff
+            # 1. osti_id or status changed
+            # 2. this object does not have bibtex yet
+            bibtex = explorer.get_bibtex(doi_record.get_osti_id())
             doi_record.bibtex = bibtex
             to_update = True
+            self.logger.debug(f"Updating Bibtex for {doi_record.material_id}")
         return to_update
