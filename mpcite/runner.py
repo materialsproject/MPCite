@@ -20,7 +20,7 @@ osti = OSTIModel(elink=elink, explorer=explorer, elsevier=elsevier)
 
 # decalre builder instance
 send_size = 1
-bld = DoiBuilder(oma, osti, send_size=send_size, sync=False)
+bld = DoiBuilder(oma, osti, send_size=send_size, sync=True)
 
 # run program
 bld.run(log_level=logging.DEBUG)

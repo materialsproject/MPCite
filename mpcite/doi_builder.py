@@ -118,7 +118,6 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
-        mp_id="mp-1218145"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
             material = MaterialModel.parse_obj(self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id}))
