@@ -39,21 +39,30 @@ class ELinkAdapter(Adapter):
             Elink Response.
         """
         r = requests.post(self.config.endpoint, auth=(self.config.username, self.config.password), data=data)
+        self.logger.debug("Your data has been posted")
         if r.status_code != 200:
             self.logger.error(f"POST for {data} failed")
             raise HTTPError(f"POST for {data} failed")
         else:
+            self.logger.debug("Parsing Elink Response")
             content: Dict[str, Dict[str, ELinkPostResponseModel]] = parse(r.content)
             if content["records"] is None:
                 raise HTTPError(f"POST for {data} failed because there's no data to post")
             to_return = []
             for _, elink_responses in content["records"].items():
                 if type(elink_responses) == list:
+                    """
+                    This is the case where you posted multiple items
+                    """
                     for elink_response in elink_responses:
                         e = self.parse_obj_to_elink_post_response_model(elink_response)
                         if e is not None:
+                            self.logger.debug(f"Received mp-id=[{e.accession_num}] - OSTI-ID = [{e.osti_id}]")
                             to_return.append(e)
                 else:
+                    """
+                    This is the case where you posted only one item
+                    """
                     e = self.parse_obj_to_elink_post_response_model(elink_responses)
                     if e is not None:
                         to_return.append(e)
@@ -115,12 +124,18 @@ class ELinkAdapter(Adapter):
         :return:
             list of ELinkGetResponseModel
         """
-        payload = {"accession_num": "(" + " ".join(mp_ids) + ")"}
+        payload = {"accession_num": "(" + " ".join(mp_ids) + ")",
+                   "rows": len(mp_ids)}
         r = requests.get(self.config.endpoint, auth=(self.config.username, self.config.password), params=payload)
         if r.status_code == 200:
             elink_response_xml = r.content
-            return [ELinkGetResponseModel.parse_obj(record) for record in
-                    parse(elink_response_xml)["records"]["record"]]
+            result = []
+            try:
+                result: List[ELinkGetResponseModel] = [ELinkGetResponseModel.parse_obj(record) for record in
+                                                       parse(elink_response_xml)["records"]["record"]]
+            except:
+                self.logger.error(f"Cannot parse returned xml: \n{elink_response_xml}")
+            return result
         else:
             msg = f"Error code from GET is {r.status_code} for {mp_ids}"
             self.logger.error(msg)
@@ -129,15 +144,15 @@ class ELinkAdapter(Adapter):
     @classmethod
     def list_to_dict(cls, responses: List[ELinkGetResponseModel]) -> Dict[str, ELinkGetResponseModel]:
         """
-        helper method to turn a list of ELinkGetResponseModel to mapping of accession_num -> ELinkGetResponseModel
+        helper method to turn a list of ELinkGetResponseModel to mapping of osti_id -> ELinkGetResponseModel
 
         :return:
             dictionary in the format of
             {
-                accession_num : ELinkGetResponseModel
+                osti_id : ELinkGetResponseModel
             }
         """
-        return {r.accession_num: r for r in responses}
+        return {r.osti_id: r for r in responses}
         # return {r.accession_num: r for r in self.get_multiple(mpid_or_ostiids=mpid_or_ostiids)}
 
     def process_elink_post_responses(self, responses: List[ELinkPostResponseModel]) -> List[DOIRecordModel]:
@@ -163,7 +178,6 @@ class ELinkAdapter(Adapter):
                                       f"on the website "
                                       f"[{ELinkGetResponseModel.get_site_url(mp_id=response.accession_num)}]")
         return result
-
 
 class ExplorerAdapter(Adapter):
 
@@ -207,6 +221,26 @@ class ExplorerAdapter(Adapter):
         else:
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
 
+    def get_multiple_bibtex(self, osti_ids: List[str]) -> Union[None, Dict[str, str]]:
+        """
+        Get mulitple bibtex using concatination of 1 OR 2 OR 3
+        Return a dictionary of MP_ID -> Bibtex
+        """
+        self.logger.info(f"Checking Bibtex for [{len(osti_ids)} records]")
+        payload = {"osti_id": [" OR ".join(osti_ids)], "rows": len(osti_ids)}
+        header = {"Accept": "application/x-bibtex"}
+        try:
+            r = requests.get(url=self.config.endpoint,
+                             auth=(self.config.username, self.config.password), params=payload, headers=header)
+        except:
+            raise HTTPError(f"Failed to request for OSTI IDs = {osti_ids}")
+        if r.status_code == 200:
+            if r.content.decode() == '':
+                return None
+            return self.parse_bibtex(r.content.decode())
+        else:
+            raise HTTPError(f"Query for OSTI IDs = {osti_ids} failed")
+
     def append_bibtex(self, doi_record: DOIRecordModel) -> bool:
         """
         find bibtex for a DOI record, return true if success, false otherwise
@@ -222,10 +256,47 @@ class ExplorerAdapter(Adapter):
                 self.logger.error(f"Cannot get bibtex for {doi_record.material_id}. Error: {e}")
                 return False
 
+    def parse_bibtex(self, data: str) -> Dict[str, str]:
+        """
+        String of bibtexes in the format of @article{.....}\n@article{.....}
+        parse them into a dictionary of osti-> bibtex
+        :param data:
+        :return:
+            a dictionary of osti-> bibtex
+        """
+        result = dict()
+        sep = "}\n"
+        contents = [d+sep for d in data.split(sep=sep)][:-1]
+        for bibtex in contents:
+            osti_id = self.find_osti_id_from_bibtex(bibtex=bibtex)
+            if osti_id is not None:
+                result[osti_id] = bibtex
+        return result
+
+    @classmethod
+    def find_osti_id_from_bibtex(cls, bibtex) -> Union[str, None]:
+        """
+        Find Osti ID from bibtex using string tricks
+        :param bibtex: string
+        :return:
+            osti id or None if not found
+        """
+        start = bibtex.find("osti_")
+        end = bibtex.find(",\n")
+        if start != -1 and end != -1:
+            return bibtex[start + len("osti_"): end]
+        return None
 
 class ElviserAdapter(Adapter):
-    def post(self, data):
-        pass
+    def post(self, data: dict):
+        if data.get("doi", '') == '':
+            self.logger.debug(f"No Elsevier POST for {data.get('identifier')} because it does not have DOI yet")
+        else:
+            headers = {"x-api-key": self.config.password}
+            url = self.config.endpoint
+            r = requests.post(url=url, data=json.dumps(data), headers=headers)
+            if r.status_code != 202:
+                self.logger.error(f"POST for {data.get('identifier')} errored. Reason: {r.content}")
 
     def get(self, params):
         pass

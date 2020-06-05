@@ -14,7 +14,7 @@ class ConnectionModel(BaseModel):
 class OSTIModel(BaseModel):
     elink: ConnectionModel = Field(..., title="Elink endpoint")
     explorer: ConnectionModel = Field(..., title="Explorer endpoint")
-
+    elsevier: ConnectionModel = Field(..., title="Elsevier endpoint")
 
 class RoboCrysModel(BaseModel):
     material_id: str
@@ -80,13 +80,13 @@ class Origin(BaseModel):
 
 
 class BandStructure(BaseModel):
-    band_gap: float
+    band_gap: Union[float, None]
     bs_task: Union[str, None]
     cbm: Union[str, None]
     dos_task: Union[str, None]
-    efermi: float
-    is_gap_direct: bool
-    is_metal: bool
+    efermi: Union[float, None]
+    is_gap_direct: Union[bool, None]
+    is_metal: Union[bool, None]
     uniform_task: Union[str, None]
     vbm: Union[str, None]
 
@@ -211,13 +211,14 @@ class DOIRecordModel(BaseModel):
     bibtex: Union[str, None] = Field(...)
     status: str = Field(...)
     valid: bool = Field(False)
-    last_updated: datetime = Field(default=datetime.now())
-    created_at: datetime = Field(default=datetime.now(),
-                                 title="DOI Created At",
-                                 description="creation time for this DOI record")
-    last_validated_on: datetime = Field(datetime=datetime.now(),
-                                        title="Date Last Validated",
-                                        description="Date that this data is last validated, not necessarily updated")
+    last_updated: Union[datetime, None] = Field(default=datetime.now())
+    created_at: Union[datetime, None] = Field(default=datetime.now(),
+                                              title="DOI Created At",
+                                              description="creation time for this DOI record")
+    last_validated_on: Union[datetime, None] = Field(datetime=datetime.now(),
+                                                     title="Date Last Validated",
+                                                     description="Date that this data is last validated, "
+                                                                 "not necessarily updated")
 
     def get_status(self):
         return self.status
@@ -239,12 +240,13 @@ class DOIRecordModel(BaseModel):
                                                bibtex=None,
                                                valid=True)
         doi_collection_record.set_status(status=elink_response_record.doi["@status"])
+        doi_collection_record.last_validated_on = datetime.now()
         return doi_collection_record
 
 
 class ElsevierPOSTContainerModel(BaseModel):
     identifier: str = Field(default="", title="mp_id")
-    source: str = Field(default="https://materialsproject.org")
+    source: str = Field(default="MATERIALS_PROJECT")
     date: str = Field(default=datetime.now().date().isoformat().__str__())
     title: str = Field(...)
     description: str = Field(default="")
@@ -254,7 +256,7 @@ class ElsevierPOSTContainerModel(BaseModel):
     type: str = Field(default='dataset')
     dateAvailable: str = Field(default= datetime.now().date().isoformat().__str__())
     dateCreated: str = Field(default=datetime.now().date().isoformat().__str__())
-    version: str = Field(default="0.0.1")
+    version: str = Field(default="1.0.0")
     funding: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
     language: str = Field(default="en")
     method: str = Field(default="Materials Project")
@@ -294,11 +296,11 @@ class ElsevierPOSTContainerModel(BaseModel):
 
     @classmethod
     def get_date_created(cls, material: MaterialModel) -> str:
-        return material.created_at.__str__()
+        return material.created_at.date().__str__()
 
     @classmethod
     def get_date_available(cls, material: MaterialModel) -> str:
-        return material.created_at.__str__()
+        return material.created_at.date().__str__()
 
     @classmethod
     def get_title(cls, material: MaterialModel) -> str:

@@ -77,6 +77,13 @@ class OstiMongoAdapter(object):
             robo_result = RoboCrysModel.parse_obj(robo_result)
             return robo_result.description
 
+    def get_doi(self, mp_id) -> str:
+        osti_id = self.get_osti_id(mp_id=mp_id)
+        if osti_id == '':
+            return ''
+        else:
+            return "10.17188/" + osti_id
+
     def get_osti_id(self, mp_id) -> str:
         """
         Used to determine if an update is necessary.

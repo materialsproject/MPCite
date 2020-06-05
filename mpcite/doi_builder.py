@@ -1,7 +1,7 @@
 from maggma.core.builder import Builder
 from adapter import OstiMongoAdapter
 from typing import Iterable, List, Dict, Union
-from utility import ELinkAdapter, ExplorerAdapter
+from utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
 from models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
     ElsevierPOSTContainerModel
 import logging
@@ -57,6 +57,7 @@ class DoiBuilder(Builder):
         self.num_bibtex_errors = 0
         self.elink_adapter = ELinkAdapter(osti.elink)
         self.explorer_adapter = ExplorerAdapter(osti.explorer)
+        self.elsevier_adapter = ElviserAdapter(osti.elsevier)
         self.send_size = send_size
         self.sync = sync
         self.logger.debug("DOI Builder Succesfully instantiated")
@@ -87,14 +88,19 @@ class DoiBuilder(Builder):
         new_materials_to_register = self.find_new_materials()
 
         to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, criteria={"valid": False})
-        self.logger.debug(f"Found {len(to_update)} materials needs to be updated")
+        self.logger.debug(f"Found [{len(to_update)}] materials needs to be updated")
+
+        if len(new_materials_to_register) == 0 and len(to_update) == 0:
+            self.logger.info("No new materials to register and no materials are invalid, checking for updates on Bibtex")
+            to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, criteria={"bibtex": None})
 
         overall = new_materials_to_register + to_update  # limit the # of items returned
         total = len(overall)
+        self.logger.debug(f"Capping the number of updates / register to [{self.send_size}]")
         overall = overall[:self.send_size]
         # overall = to_update
-        self.logger.info(f"{total} materials needs registered or updated. Due to bandwidth limit, "
-                         f"this run there will be updating the first {len(overall)} materials")
+        self.logger.info(f"[{total}] materials needs registered or updated. Due to bandwidth limit, "
+                         f"this run there will be updating the first [{len(overall)}] materials")
 
         return overall
 
@@ -112,10 +118,15 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         mp_id = item
+        mp_id="mp-1218145"
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
-            elink_post_record = self.generate_elink_model(mp_id)
-            return {"elink_post_record": elink_post_record, "mp_id": mp_id}
+            material = MaterialModel.parse_obj(self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id}))
+            elink_post_record = self.generate_elink_model(material=material)
+            elsevier_post_record = self.generate_elsevier_model(material=material)
+            return {"elink_post_record": elink_post_record,
+                    "elsevier_post_record": elsevier_post_record,
+                    "mp_id": mp_id}
         except Exception as e:
             self.logger.error(f"Skipping [{item}], Error: {e}")
 
@@ -140,27 +151,43 @@ class DoiBuilder(Builder):
         """
         self.logger.info(f"Start Updating/registering {len(items)} items")
         elink_post_data: List[dict] = []
-        # elsevier_post_data: List[dict] = []
+        elsevier_post_data: List[dict] = []
 
         # group them
         for item in items:
             if item.get("elink_post_record", None) is not None:
                 elink_post_data.append(ELinkGetResponseModel.custom_to_dict(elink_record=item["elink_post_record"]))
             if item.get("elsevier_post_record", None) is not None:
-                self.logger.debug("NOT IMPLEMENTED YET")
+                elsevier_post_data.append(item["elsevier_post_record"].dict())
 
         # post it
         try:
             failed_count = 0
+
+            # Elink POST
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
+            self.logger.debug("All ELINK Post data aggregated, ready to POST")
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
             to_update: List[DOIRecordModel] = self.elink_adapter.process_elink_post_responses(responses=
                                                                                               elink_post_responses)
             failed_count += len(elink_post_data) - len(to_update)
-            # # add in bibtex
+
+            # Explorer POST
+            self.logger.debug(f"Updating bibtex")
             for r in to_update:
                 status = self.explorer_adapter.append_bibtex(r)
                 failed_count += 1 if status is False else 0
+
+            # elsevier POST
+            to_update_dict: Dict[str, DOIRecordModel] = dict()
+            for doirecord in to_update:
+                to_update_dict[doirecord.material_id] = doirecord
+            self.logger.debug("POSTing Elsevier data")
+            for post_data in elsevier_post_data:
+                # if elink post was successful, then it has the doi, add it to elsevier's
+                if post_data["identifier"] in to_update_dict:
+                    post_data["doi"] = to_update_dict[post_data["identifier"]].doi
+                self.elsevier_adapter.post(data=post_data)
 
             # update doi collection
             self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
@@ -169,12 +196,14 @@ class DoiBuilder(Builder):
         except HTTPError as e:
             self.logger.error(f"Failed to POST, no updates done. Error: {e}")
 
+    def finalize(self):
+        self.logger.info(f"DOI store now has {self.adapter.doi_store.count()} records")
+        super(DoiBuilder, self).finalize()
+
+
     """
     Utility functions
     """
-
-    class MaterialNotFound(Exception):
-        pass
 
     def find_new_materials(self) -> List[str]:
         """
@@ -186,7 +215,7 @@ class DoiBuilder(Builder):
         materials = set(self.adapter.materials_store.distinct(self.adapter.materials_store.key))
         dois = set(self.adapter.doi_store.distinct(self.adapter.doi_store.key))
         to_add = list(materials - dois)
-        self.logger.debug(f"Found {len(to_add)} new Materials to register")
+        self.logger.debug(f"Found [{len(to_add)}] new Materials to register")
         return to_add
 
     def sync_doi_collection(self):
@@ -201,10 +230,15 @@ class DoiBuilder(Builder):
         """
         # find distinct mp_ids that are currently in the doi collection
         all_keys = self.adapter.doi_store.distinct(field=self.adapter.doi_store.key)
-        self.logger.info(f"Syncing {len(all_keys)} DOIs")
+        self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask elink if it has those DOI records. create a mapping of mp_id -> elink_Record
-        elink_records_dict = ELinkAdapter.list_to_dict(self.elink_adapter.get_multiple(mp_ids=all_keys))
+        elink_records = self.elink_adapter.get_multiple(mp_ids=all_keys)
+        # osti_id -> elink_record
+        elink_records_dict = ELinkAdapter.list_to_dict(elink_records)
+
+        # osti_id -> bibtex
+        bibtex_dict = self.explorer_adapter.get_multiple_bibtex(osti_ids=[r.osti_id for r in elink_records])
 
         # find all DOIs that are currently in the DOI collection
         doi_records: List[DOIRecordModel] = \
@@ -214,73 +248,70 @@ class DoiBuilder(Builder):
         to_update: List[DOIRecordModel] = []
         to_delete: List[DOIRecordModel] = []
 
-        # for each doi in the DOI collection, check if it exist in elink
+        # iterate through doi records to classify them as being updated or deleted
         for doi_record in doi_records:
-            doi_record.last_validated_on = datetime.now()
-            if doi_record.material_id not in elink_records_dict:
-                # if a DOI entry is in DOI collection, but not in Elink, add it to the delete list
+            osti_id = doi_record.get_osti_id()
+            if osti_id not in elink_records_dict:
                 to_delete.append(doi_record)
-                pass
-            elif self.should_update(doi_record=doi_record,
-                                    elink_record=elink_records_dict[doi_record.material_id],
-                                    explorer=self.explorer_adapter):
-                # if a DOI entry needs to updated, add it to the update list. Please note that should_update will
-                # only update the DOI entry stored in memory, still need to update the actual DOI entry in database
-                doi_record.last_updated = datetime.now()
+            else:
+                self.update_doi_record(doi_record=doi_record,
+                                       elink_record=elink_records_dict.get(osti_id, None),
+                                       bibtex=bibtex_dict.get(osti_id, None)
+                                       )
                 to_update.append(doi_record)
 
-        self.logger.info(f"Updating {len(to_update)} records because E-Link record does not match DOI Collection")
-        self.logger.debug(f"Updating {[r.material_id for r in to_update]}")
-        self.logger.info(f"Deleting {len(to_delete)} records because they are in DOI collection but not in E-Link")
-        self.logger.debug(f"Deleting {[r.material_id for r in to_delete]}")
         # send database query for actual updates/deletions
         self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
         self.adapter.doi_store.remove_docs(criteria={
             self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
+        self.logger.info(f"Updated [{len(to_update)}] records")
+        self.logger.info(f"Removed [{len(to_delete)}] records")
 
-    def generate_elink_model(self, mp_id: str) -> ELinkGetResponseModel:
+    def generate_elink_model(self, material: MaterialModel) -> ELinkGetResponseModel:
         """
         Generate ELink Get model by mp_id
 
-        :param mp_id: material id of the Elink model trying to generate
+        :param material: material of the Elink model trying to generate
         :return:
             instance of ELinkGetResponseModel
         """
-        material = self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id})
-        if material is None:
-            msg = f"Material {mp_id} is not found in the materials store"
-            self.logger.error(msg)
-            raise DoiBuilder.MaterialNotFound(msg)
-        else:
-            material = MaterialModel.parse_obj(material)
 
-        elink_record = ELinkGetResponseModel(osti_id=self.adapter.get_osti_id(mp_id=mp_id),
+        elink_record = ELinkGetResponseModel(osti_id=self.adapter.get_osti_id(mp_id=material.task_id),
                                              title=ELinkGetResponseModel.get_title(material=material),
-                                             product_nos=mp_id,
-                                             accession_num=mp_id,
+                                             product_nos=material.task_id,
+                                             accession_num=material.task_id,
                                              publication_date=material.last_updated.strftime('%m/%d/%Y'),
-                                             site_url=ELinkGetResponseModel.get_site_url(mp_id=mp_id),
+                                             site_url=ELinkGetResponseModel.get_site_url(mp_id=material.task_id),
                                              keywords=ELinkGetResponseModel.get_keywords(material=material),
-                                             description=self.adapter.get_material_description(mp_id)
+                                             description=self.adapter.get_material_description(material.task_id)
                                              )
         return elink_record
 
-    def should_update(self,
-                      doi_record:DOIRecordModel,
-                      elink_record: ELinkGetResponseModel,
-                      explorer: ExplorerAdapter) -> bool:
+    def generate_elsevier_model(self, material: MaterialModel) -> ElsevierPOSTContainerModel:
+        elsevier_model = ElsevierPOSTContainerModel(identifier=material.task_id,
+                                                    title=ElsevierPOSTContainerModel.get_title(material),
+                                                    doi=self.adapter.get_doi(mp_id=material.task_id),
+                                                    url=ElsevierPOSTContainerModel.get_url(material.task_id),
+                                                    keywords=ElsevierPOSTContainerModel.get_keywords(material),
+                                                    date=datetime.now().date().__str__(),
+                                                    dateCreated=ElsevierPOSTContainerModel.get_date_created(material),
+                                                    dateAvailable=ElsevierPOSTContainerModel.get_date_available(material),
+                                                    description=self.adapter.get_material_description(material.task_id)
+                                                    )
+        return elsevier_model
+
+    def update_doi_record(self, doi_record, elink_record:ELinkGetResponseModel, bibtex:str):
         """
-        Update the DOI entry based on the input ELinkGetResponseModel
-        :param doi_record: doi record to see if require an update
-        :param explorer: explorer connection
-        :param elink_record: elink record to compare against
+        Policies for updating a DOI record
+        :param doi_record:
+        :param elink_record:
+        :param bibtex:
         :return:
-            True if this record is updated
-            False otherwise
         """
         to_update = False
         if doi_record.get_osti_id() != elink_record.osti_id:
             to_update = True
+            # this condition should never be entered, but for the sake of extreme caution
             msg = f"DOI record mismatch for mp_id = {doi_record.material_id}. " \
                   f"Overwriting the one in DOI collection to match OSTI"
             self.logger.error(msg)
@@ -289,12 +320,9 @@ class DoiBuilder(Builder):
             to_update = True
             self.logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
             doi_record.set_status(elink_record.doi["@status"])
-        if to_update or doi_record.bibtex is None:
-            # update bibtex iff
-            # 1. osti_id or status changed
-            # 2. this object does not have bibtex yet
-            bibtex = explorer.get_bibtex(doi_record.get_osti_id())
-            doi_record.bibtex = bibtex
+        if doi_record.bibtex != bibtex:
             to_update = True
-            self.logger.debug(f"Updating Bibtex for {doi_record.material_id}")
-        return to_update
+            doi_record.bibtex = bibtex
+        doi_record.last_validated_on = datetime.now()
+        if to_update:
+            doi_record.last_updated = datetime.now()
