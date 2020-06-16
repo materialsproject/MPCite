@@ -29,6 +29,7 @@ class Adapter(metaclass=ABCMeta):
 
 class ELinkAdapter(Adapter):
     INVALID_URL_STATUS_MESSAGE = "URL entered is invalid or unreachable."
+    MAXIMUM_ABSTRACT_LENGTH_MESSAGE = " Abstract exceeds maximum length of 12000 characters."
 
     def post(self, data: bytes) -> List[ELinkPostResponseModel]:
         """
@@ -117,13 +118,27 @@ class ELinkAdapter(Adapter):
             self.logger.error(msg)
             raise HTTPError(msg)
 
-    def get_multiple(self, mp_ids: List[str]) -> List[ELinkGetResponseModel]:
+    def get_multiple(self, mp_ids: List[str], chunk_size=10) -> List[ELinkGetResponseModel]:
+        if len(mp_ids) > chunk_size:
+            self.logger.debug(f"Syncing [{len(mp_ids)}] Elink Data in chunks of {chunk_size}")
+            # chunck it up
+            result = []
+            for i in range(0, len(mp_ids), chunk_size):
+                chunk = self.get_multiple_helper(mp_ids=mp_ids[i: i+chunk_size])
+                result.extend(chunk)
+            return result
+        else:
+            return self.get_multiple_helper(mp_ids=mp_ids)
+
+    def get_multiple_helper(self, mp_ids: List[str]) -> List[ELinkGetResponseModel]:
         """
         get a list of elink responses from mpid-s
         :param mp_ids: list of mpids
         :return:
             list of ELinkGetResponseModel
         """
+        if len(mp_ids) == 0:
+            return []
         payload = {"accession_num": "(" + " ".join(mp_ids) + ")",
                    "rows": len(mp_ids)}
         r = requests.get(self.config.endpoint, auth=(self.config.username, self.config.password), params=payload)
@@ -131,13 +146,18 @@ class ELinkAdapter(Adapter):
             elink_response_xml = r.content
             result = []
             try:
-                result: List[ELinkGetResponseModel] = [ELinkGetResponseModel.parse_obj(record) for record in
-                                                       parse(elink_response_xml)["records"]["record"]]
+                num_found = parse(elink_response_xml)["records"]["@numfound"]
+                if num_found == "1":
+                    result.append(ELinkGetResponseModel.parse_obj(parse(elink_response_xml)["records"]["record"]))
+                else:
+                    result: List[ELinkGetResponseModel] = [ELinkGetResponseModel.parse_obj(record) for record in
+                                                   parse(elink_response_xml)["records"]["record"]]
             except:
-                self.logger.error(f"Cannot parse returned xml: \n{elink_response_xml}")
+                # self.logger.error(f"Cannot parse returned xml: \n{elink_response_xml}")
+                self.logger.error("Cannot parse returned xml")
             return result
         else:
-            msg = f"Error code from GET is {r.status_code} for {mp_ids}"
+            msg = f"Error code from GET is {r.status_code}: {r.content}"
             self.logger.error(msg)
             raise HTTPError(msg)
 
@@ -177,7 +197,12 @@ class ELinkAdapter(Adapter):
                                       f"Please double check whether this material actually exist "
                                       f"on the website "
                                       f"[{ELinkGetResponseModel.get_site_url(mp_id=response.accession_num)}]")
+                elif response.status_message == ELinkAdapter.MAXIMUM_ABSTRACT_LENGTH_MESSAGE:
+                    self.logger.error("ELINK: Maximum abstract length reached")
+                else:
+                    self.logger.error(f"ELINK Unknown error encountered. {response.status_message}")
         return result
+
 
 class ExplorerAdapter(Adapter):
 
@@ -210,7 +235,8 @@ class ExplorerAdapter(Adapter):
         payload = {"osti_id": osti_id}
         header = {"Accept": "application/x-bibtex"}
         try:
-            r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password), params=payload,
+            r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password),
+                             params=payload,
                              headers=header)
         except:
             raise HTTPError(f"Failed to request for OSTI ID = {osti_id}")
@@ -221,23 +247,41 @@ class ExplorerAdapter(Adapter):
         else:
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
 
-    def get_multiple_bibtex(self, osti_ids: List[str]) -> Union[None, Dict[str, str]]:
+    def get_multiple_bibtex(self, osti_ids: List[str], chunk_size=10) -> Dict[str, str]:
         """
         Get mulitple bibtex using concatination of 1 OR 2 OR 3
         Return a dictionary of MP_ID -> Bibtex
         """
-        self.logger.info(f"Checking Bibtex for [{len(osti_ids)} records]")
+        self.logger.info(f"Syncing [{len(osti_ids)}] Bibtex records in chunk of {chunk_size}")
+        if len(osti_ids) == 0:
+            return dict()
+        elif len(osti_ids) < chunk_size:
+            return self.get_multiple_bibtex_helper(osti_ids)
+        else:
+            result = dict()
+            for i in range(0, len(osti_ids), chunk_size):
+                try:
+                    result.update(self.get_multiple_bibtex_helper(osti_ids[i: i+chunk_size]))
+                except HTTPError:
+                    self.logger.error(f"Failed to update osti_ids [{osti_ids[i: i+chunk_size]}], skipping")
+            return result
+
+    def get_multiple_bibtex_helper(self, osti_ids: List[str]) -> Dict[str, str]:
+        """
+        Get multiple bibtex, assuming that I can send all osti_ids at once
+        :param osti_ids:
+        :return:
+        """
         payload = {"osti_id": [" OR ".join(osti_ids)], "rows": len(osti_ids)}
         header = {"Accept": "application/x-bibtex"}
-        try:
-            r = requests.get(url=self.config.endpoint,
-                             auth=(self.config.username, self.config.password), params=payload, headers=header)
-        except:
-            raise HTTPError(f"Failed to request for OSTI IDs = {osti_ids}")
+        r = requests.get(url=self.config.endpoint,
+                         auth=(self.config.username, self.config.password),
+                         params=payload, headers=header)
         if r.status_code == 200:
             if r.content.decode() == '':
-                return None
-            return self.parse_bibtex(r.content.decode())
+                return dict()
+            result = self.parse_bibtex(r.content.decode())
+            return result
         else:
             raise HTTPError(f"Query for OSTI IDs = {osti_ids} failed")
 
@@ -266,7 +310,7 @@ class ExplorerAdapter(Adapter):
         """
         result = dict()
         sep = "}\n"
-        contents = [d+sep for d in data.split(sep=sep)][:-1]
+        contents = [d + sep for d in data.split(sep=sep)][:-1]
         for bibtex in contents:
             osti_id = self.find_osti_id_from_bibtex(bibtex=bibtex)
             if osti_id is not None:
@@ -287,7 +331,9 @@ class ExplorerAdapter(Adapter):
             return bibtex[start + len("osti_"): end]
         return None
 
+
 class ElviserAdapter(Adapter):
+
     def post(self, data: dict):
         if data.get("doi", '') == '':
             self.logger.debug(f"No Elsevier POST for {data.get('identifier')} because it does not have DOI yet")
@@ -300,5 +346,3 @@ class ElviserAdapter(Adapter):
 
     def get(self, params):
         pass
-
-

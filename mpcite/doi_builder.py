@@ -3,11 +3,12 @@ from adapter import OstiMongoAdapter
 from typing import Iterable, List, Dict, Union
 from utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
 from models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
-    ElsevierPOSTContainerModel
+    ElsevierPOSTContainerModel, LogContent
 import logging
 from urllib3.exceptions import HTTPError
 from datetime import datetime
-
+from pathlib import Path
+import json
 
 class DoiBuilder(Builder):
     """
@@ -32,7 +33,12 @@ class DoiBuilder(Builder):
 
     """
 
-    def __init__(self, adapter: OstiMongoAdapter, osti: OSTIModel, send_size=1000, sync=True, **kwargs):
+    def __init__(self,
+                 adapter: OstiMongoAdapter,
+                 osti: OSTIModel,
+                 send_size=1000,
+                 sync=True,
+                 log_file_path: Path = Path(__file__).parent / "log.txt", **kwargs):
         """
          connection with materials database
             1. establish connection with materials collection (Guaranteed online)
@@ -62,6 +68,12 @@ class DoiBuilder(Builder):
         self.sync = sync
         self.logger.debug("DOI Builder Succesfully instantiated")
         self.logger = logging.getLogger("doi_builder")
+        self.log_file_path: Path = log_file_path
+
+        self.last_updated_count = 0
+        self.created_at_count = 0
+        self.last_validated_on_count = 0
+        self.elsevier_updated_on_count = 0
 
     def get_items(self) -> Iterable:
         """
@@ -80,7 +92,12 @@ class DoiBuilder(Builder):
         """
         if self.sync:
             self.logger.info("Start Syncing with E-Link")
-            self.sync_doi_collection()
+            try:
+                self.sync_doi_collection()
+            except Exception as e:
+                self.logger.error(
+                    "SYNC failed, abort syncing, directly continuing to finding new materials. "
+                    "Please notify system administrator \n Error: {}".format(e))
         else:
             self.logger.info("Not syncing in this iteration")
 
@@ -88,19 +105,15 @@ class DoiBuilder(Builder):
         new_materials_to_register = self.find_new_materials()
 
         to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, criteria={"valid": False})
-        self.logger.debug(f"Found [{len(to_update)}] materials needs to be updated")
-
-        if len(new_materials_to_register) == 0 and len(to_update) == 0:
-            self.logger.info("No new materials to register and no materials are invalid, checking for updates on Bibtex")
-            to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, criteria={"bibtex": None})
+        self.logger.debug(f"Found [{len(to_update)}] materials that are invalid, need to be updated")
 
         overall = new_materials_to_register + to_update  # limit the # of items returned
         total = len(overall)
         self.logger.debug(f"Capping the number of updates / register to [{self.send_size}]")
         overall = overall[:self.send_size]
         # overall = to_update
-        self.logger.info(f"[{total}] materials needs registered or updated. Due to bandwidth limit, "
-                         f"this run there will be updating the first [{len(overall)}] materials")
+        self.logger.info(f"[{total}] materials needs registered / updated. Updating the first [{len(overall)}] "
+                         f"materials due to bandwidth limit")
 
         return overall
 
@@ -120,7 +133,8 @@ class DoiBuilder(Builder):
         mp_id = item
         self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
-            material = MaterialModel.parse_obj(self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id}))
+            material = MaterialModel.parse_obj(
+                self.adapter.materials_store.query_one(criteria={self.adapter.materials_store.key: mp_id}))
             elink_post_record = self.generate_elink_model(material=material)
             elsevier_post_record = self.generate_elsevier_model(material=material)
             return {"elink_post_record": elink_post_record,
@@ -164,21 +178,15 @@ class DoiBuilder(Builder):
             failed_count = 0
 
             # Elink POST
+            self.logger.info("POST-ing to Elink")
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
-            self.logger.debug("All ELINK Post data aggregated, ready to POST")
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
             to_update: List[DOIRecordModel] = self.elink_adapter.process_elink_post_responses(responses=
                                                                                               elink_post_responses)
             failed_count += len(elink_post_data) - len(to_update)
 
-            # Explorer POST
-            self.logger.debug(f"Updating bibtex")
-            for r in to_update:
-                status = self.explorer_adapter.append_bibtex(r)
-                failed_count += 1 if status is False else 0
-
             # elsevier POST
-            to_update_dict: Dict[str, DOIRecordModel] = dict()
+            to_update_dict: Dict[str, DOIRecordModel] = dict()  # mp_id -> DOIRecord
             for doirecord in to_update:
                 to_update_dict[doirecord.material_id] = doirecord
             self.logger.debug("POSTing Elsevier data")
@@ -186,9 +194,17 @@ class DoiBuilder(Builder):
                 # if elink post was successful, then it has the doi, add it to elsevier's
                 if post_data["identifier"] in to_update_dict:
                     post_data["doi"] = to_update_dict[post_data["identifier"]].doi
-                self.elsevier_adapter.post(data=post_data)
+                    try:
+                        self.elsevier_adapter.post(data=post_data)
+                        to_update_dict[post_data["identifier"]].elsevier_updated_on = datetime.now()
+                        self.elsevier_updated_on_count += 1
+                    except Exception as e:
+                        self.logger.error(msg="Unable to post because {}".format(e.__str__()))
 
             # update doi collection
+            self.created_at_count = len(to_update)
+            self.last_validated_on_count += len(to_update)
+            self.last_updated_count += len(to_update)
             self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
             self.logger.info(f"Attempted to update / register [{len(to_update)}] record(s) "
                              f"- [{len(to_update) - failed_count}] Succeeded - [{failed_count}] Failed")
@@ -197,8 +213,8 @@ class DoiBuilder(Builder):
 
     def finalize(self):
         self.logger.info(f"DOI store now has {self.adapter.doi_store.count()} records")
+        self.write_log(self.log_file_path)
         super(DoiBuilder, self).finalize()
-
 
     """
     Utility functions
@@ -219,8 +235,8 @@ class DoiBuilder(Builder):
 
     def sync_doi_collection(self):
         """
-        Sync DOI collection, set the status, and bibtext field[IN PROGRESS],
-        double check whether the DOI field matches??
+        Sync DOI collection, set the status, and bibtext field,
+        double check whether the DOI field matches
         If an entry is in the DOI collection but is not in E-Link, remove it
 
         NOTE, this function might take a while to execute
@@ -232,13 +248,17 @@ class DoiBuilder(Builder):
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask elink if it has those DOI records. create a mapping of mp_id -> elink_Record
-        elink_records = self.elink_adapter.get_multiple(mp_ids=all_keys)
+        elink_records = self.elink_adapter.get_multiple(mp_ids=all_keys, chunk_size=100)
         # osti_id -> elink_record
         elink_records_dict = ELinkAdapter.list_to_dict(elink_records)
 
         # osti_id -> bibtex
-        bibtex_dict = self.explorer_adapter.get_multiple_bibtex(osti_ids=[r.osti_id for r in elink_records])
-
+        try:
+            bibtex_dict = self.explorer_adapter.get_multiple_bibtex(
+                osti_ids=[r.osti_id for r in elink_records], chunk_size=100)
+        except HTTPError:
+            bibtex_dict = dict()
+        print("BIBTEX LENGTH = ", len(bibtex_dict))
         # find all DOIs that are currently in the DOI collection
         doi_records: List[DOIRecordModel] = \
             [DOIRecordModel.parse_obj(i)
@@ -261,8 +281,8 @@ class DoiBuilder(Builder):
 
         # send database query for actual updates/deletions
         self.adapter.doi_store.update(docs=[r.dict() for r in to_update], key=self.adapter.doi_store.key)
-        self.adapter.doi_store.remove_docs(criteria={
-            self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
+        # self.adapter.doi_store.remove_docs(criteria={
+        #     self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
         self.logger.info(f"Updated [{len(to_update)}] records")
         self.logger.info(f"Removed [{len(to_delete)}] records")
 
@@ -287,19 +307,21 @@ class DoiBuilder(Builder):
         return elink_record
 
     def generate_elsevier_model(self, material: MaterialModel) -> ElsevierPOSTContainerModel:
+        doi = self.adapter.get_doi(mp_id=material.task_id)
         elsevier_model = ElsevierPOSTContainerModel(identifier=material.task_id,
                                                     title=ElsevierPOSTContainerModel.get_title(material),
-                                                    doi=self.adapter.get_doi(mp_id=material.task_id),
+                                                    doi=doi,
                                                     url=ElsevierPOSTContainerModel.get_url(material.task_id),
                                                     keywords=ElsevierPOSTContainerModel.get_keywords(material),
                                                     date=datetime.now().date().__str__(),
                                                     dateCreated=ElsevierPOSTContainerModel.get_date_created(material),
-                                                    dateAvailable=ElsevierPOSTContainerModel.get_date_available(material),
+                                                    dateAvailable=ElsevierPOSTContainerModel.get_date_available(
+                                                        material),
                                                     description=self.adapter.get_material_description(material.task_id)
                                                     )
         return elsevier_model
 
-    def update_doi_record(self, doi_record, elink_record:ELinkGetResponseModel, bibtex:str):
+    def update_doi_record(self, doi_record, elink_record: ELinkGetResponseModel, bibtex: str):
         """
         Policies for updating a DOI record
         :param doi_record:
@@ -323,5 +345,26 @@ class DoiBuilder(Builder):
             to_update = True
             doi_record.bibtex = bibtex
         doi_record.last_validated_on = datetime.now()
+        self.last_validated_on_count += 1
         if to_update:
             doi_record.last_updated = datetime.now()
+            self.last_updated_count += 1
+
+    def write_log(self, log_file_path: Path):
+        if not log_file_path.exists():
+            log_file_path.parent.mkdir(parents=True, exist_ok=True)
+            file = log_file_path.open('w+')
+            file.close()
+        file = log_file_path.open("a+")
+        logcontent = LogContent(
+            last_updated_count=self.last_updated_count,
+            created_at_count=self.created_at_count,
+            elsevier_updated_on_count=self.elsevier_updated_on_count,
+            last_validated_count=self.last_validated_on_count,
+            material_data_base_count = self.adapter.materials_store.count(),
+            doi_store_count=self.adapter.doi_store.count(),
+            bibtex_count=self.adapter.doi_store.count({"bibtex":{"$ne":None}})
+        )
+        file.write(logcontent.json() + "\n")
+        file.close()
+        self.logger.debug(f"Log written to {log_file_path.as_posix()}")

@@ -75,7 +75,10 @@ class OstiMongoAdapter(object):
             return ELinkGetResponseModel.get_default_description()
         else:
             robo_result = RoboCrysModel.parse_obj(robo_result)
-            return robo_result.description
+            description = robo_result.description
+            if description is None:
+                description = ELinkGetResponseModel.get_default_description()
+            return description[:12000]  # 12000 is the Elink Abstract character limit
 
     def get_doi(self, mp_id) -> str:
         osti_id = self.get_osti_id(mp_id=mp_id)

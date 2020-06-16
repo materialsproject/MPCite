@@ -16,11 +16,12 @@ class OSTIModel(BaseModel):
     explorer: ConnectionModel = Field(..., title="Explorer endpoint")
     elsevier: ConnectionModel = Field(..., title="Elsevier endpoint")
 
+
 class RoboCrysModel(BaseModel):
     material_id: str
     last_updated: datetime
     # condensed_structure
-    description: str
+    description: Union[None, str] = Field(default=None)
 
 
 class Lattice(BaseModel):
@@ -219,7 +220,9 @@ class DOIRecordModel(BaseModel):
                                                      title="Date Last Validated",
                                                      description="Date that this data is last validated, "
                                                                  "not necessarily updated")
-
+    elsevier_updated_on: Union[datetime, None] = Field(None,
+                                                       title="Date Elsevier is updated",
+                                                       description="If None, means never uploaded to elsevier")
     def get_status(self):
         return self.status
 
@@ -329,4 +332,13 @@ class ExplorerGetJSONResponseModel(BaseModel):
     links: List[Dict[str, str]]
 
 
+class LogContent(BaseModel):
+    date: datetime = Field(default=datetime.now())
+    last_updated_count: int = Field(default=0)
+    created_at_count: int = Field(default=0)
+    elsevier_updated_on_count: int = Field(default=0)
+    last_validated_count: int = Field(default=0)
+    material_data_base_count:int = Field(default=0)
+    doi_store_count:int = Field(default=0)
+    bibtex_count:int = Field(default=0)
 

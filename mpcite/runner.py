@@ -19,9 +19,13 @@ elsevier = ConnectionModel.parse_obj(config["elsevier"])
 osti = OSTIModel(elink=elink, explorer=explorer, elsevier=elsevier)
 
 # decalre builder instance
-send_size = 1
-bld = DoiBuilder(oma, osti, send_size=send_size, sync=True)
+send_size = 0
+bld = DoiBuilder(oma, osti, send_size=send_size, sync=True, log_file_path=Path(__file__).parent.parent / "files" /"log.txt")
 
 # run program
+import time
+tic = time.perf_counter()
 bld.run(log_level=logging.DEBUG)
+toc = time.perf_counter()
+print(f"Program run took {toc - tic:0.4f} seconds")
 
