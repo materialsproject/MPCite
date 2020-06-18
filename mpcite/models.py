@@ -334,11 +334,34 @@ class ExplorerGetJSONResponseModel(BaseModel):
 
 class LogContent(BaseModel):
     date: datetime = Field(default=datetime.now())
-    last_updated_count: int = Field(default=0)
-    created_at_count: int = Field(default=0)
-    elsevier_updated_on_count: int = Field(default=0)
-    last_validated_count: int = Field(default=0)
-    material_data_base_count:int = Field(default=0)
-    doi_store_count:int = Field(default=0)
-    bibtex_count:int = Field(default=0)
-
+    last_updated_count: int = Field(default=0,
+                                    title="Number of DOIs that are updated",
+                                    description="Number of DOIs that are updated in this run. \nDOI is update iff"
+                                                "\n1) this is a new submission"
+                                                "\n2) bibtex has changed (from Explorer)"
+                                                "\n3) DOI number has changed(this should never happen, but for the "
+                                                "sake of fail safe)")
+    created_at_count: int = Field(default=0,
+                                  title="Number of records created",
+                                  description="Number of records created")
+    elsevier_updated_on_count: int = Field(default=0,
+                                           title="Number of DOIs uploaded to Elsevier",
+                                           description="Number of DOIs uploaded to Elsevier")
+    last_validated_count: int = Field(default=0,
+                                      title="number of DOIs validated",
+                                      description="Number of DOIs that are validated in this run")
+    material_data_base_count:int = Field(default=0,
+                                         title="Total number of materials in the database",
+                                         description="Total number of materials in the database")
+    doi_store_count:int = Field(default=0,
+                                title="Number of DOIs that are in the DOI collection",
+                                description="Number of DOIs that are in the DOI collection")
+    bibtex_count:int = Field(default=0,
+                             title="Number of DOIs that has bibtex",
+                             description="Number of DOIs that has bibtex ")
+    doi_completed: int = Field(default=0,
+                               title="Number of DOIs Completed",
+                               description="Number of DOIs that has a COMPLETED status")
+    doi_pending: int = Field(default=0,
+                             title="Number of DOI Pending",
+                             description="Number of DOIs that has PENDING status")

@@ -258,7 +258,6 @@ class DoiBuilder(Builder):
                 osti_ids=[r.osti_id for r in elink_records], chunk_size=100)
         except HTTPError:
             bibtex_dict = dict()
-        print("BIBTEX LENGTH = ", len(bibtex_dict))
         # find all DOIs that are currently in the DOI collection
         doi_records: List[DOIRecordModel] = \
             [DOIRecordModel.parse_obj(i)
@@ -363,7 +362,9 @@ class DoiBuilder(Builder):
             last_validated_count=self.last_validated_on_count,
             material_data_base_count = self.adapter.materials_store.count(),
             doi_store_count=self.adapter.doi_store.count(),
-            bibtex_count=self.adapter.doi_store.count({"bibtex":{"$ne":None}})
+            bibtex_count=self.adapter.doi_store.count({"bibtex":{"$ne":None}}),
+            doi_completed=self.adapter.doi_store.count({"status": {"$eq":"COMPLETED"}}),
+            doi_pending=self.adapter.doi_store.count({"status": {"$eq": "PENDING"}}),
         )
         file.write(logcontent.json() + "\n")
         file.close()

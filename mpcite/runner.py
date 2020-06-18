@@ -19,8 +19,12 @@ elsevier = ConnectionModel.parse_obj(config["elsevier"])
 osti = OSTIModel(elink=elink, explorer=explorer, elsevier=elsevier)
 
 # decalre builder instance
-send_size = 0
-bld = DoiBuilder(oma, osti, send_size=send_size, sync=True, log_file_path=Path(__file__).parent.parent / "files" /"log.txt")
+send_size = 1000
+
+
+import os
+log_file_path = Path(os.getcwd()).parent / "files" / "log.txt"
+bld = DoiBuilder(oma, osti, send_size=send_size, sync=True, log_file_path=log_file_path)
 
 # run program
 import time
