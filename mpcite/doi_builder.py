@@ -210,6 +210,8 @@ class DoiBuilder(Builder):
                              f"- [{len(to_update) - failed_count}] Succeeded - [{failed_count}] Failed")
         except HTTPError as e:
             self.logger.error(f"Failed to POST, no updates done. Error: {e}")
+        except Exception as e:
+            self.logger.error(f"Failed to POST. No updates done. Error: \n{e}")
 
     def finalize(self):
         self.logger.info(f"DOI store now has {self.adapter.doi_store.count()} records")
