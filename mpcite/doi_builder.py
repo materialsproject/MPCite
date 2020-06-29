@@ -9,6 +9,9 @@ from urllib3.exceptions import HTTPError
 from datetime import datetime
 from pathlib import Path
 import json
+from models import RoboCrysModel
+import os
+from tqdm import tqdm
 
 class DoiBuilder(Builder):
     """
@@ -37,8 +40,10 @@ class DoiBuilder(Builder):
                  adapter: OstiMongoAdapter,
                  osti: OSTIModel,
                  send_size=1000,
-                 sync=True,
-                 log_file_path: Path = Path(__file__).parent / "log.txt", **kwargs):
+                 should_sync_from_remote_sites=True,
+                 should_register_new_DOI=True,
+                 should_sync_all_materials=True,
+                 log_folder_path: str = os.getcwd(), **kwargs):
         """
          connection with materials database
             1. establish connection with materials collection (Guaranteed online)
@@ -60,15 +65,23 @@ class DoiBuilder(Builder):
         super().__init__(sources=[adapter.materials_store, adapter.robocrys_store],
                          targets=[adapter.doi_store],
                          **kwargs)
-        self.num_bibtex_errors = 0
+        # set connections
         self.elink_adapter = ELinkAdapter(osti.elink)
         self.explorer_adapter = ExplorerAdapter(osti.explorer)
         self.elsevier_adapter = ElviserAdapter(osti.elsevier)
+
+        # set flags
         self.send_size = send_size
-        self.sync = sync
-        self.logger.debug("DOI Builder Succesfully instantiated")
+        self.should_sync_from_remote_sites = should_sync_from_remote_sites
+        self.should_sync_all_materials = should_sync_all_materials
+        self.should_register_new_DOI = should_register_new_DOI
+
+        # set logging
         self.logger = logging.getLogger("doi_builder")
-        self.log_file_path: Path = log_file_path
+        self.logger.debug("DOI Builder Succesfully instantiated")
+        self.log_folder_path: Path = Path(log_folder_path)
+        if not self.log_folder_path.exists():
+            self.log_folder_path.mkdir(parents=True, exist_ok=True)
 
         self.last_updated_count = 0
         self.created_at_count = 0
@@ -77,20 +90,31 @@ class DoiBuilder(Builder):
 
     def get_items(self) -> Iterable:
         """
-        Get a list of material that requires registration with E-Link or an update.
+        Get a list of material that requires registration or update with remote servers
 
-        Step 1[OPTIONAL]: Perform syncing from Elink to DOI database.
-        Step 2: Compute materials that requires update or registration
-            - A new material requires registration if it is in the MP database, but not in the DOI database
-            - A material requires update if its valid field is False
-        Step 3: cap the number of materials sent to self.send size due to bandwidth limit
+        Steps:
+            1. Perform synchronization if should_sync_from_remote_sites is True
+                - Note that this is a ONE WAY sync, it only pulls data from remote server and checks whether local data matches
+                - If a mismatch happened
+                    - if a mismatch is caused by there is this material from remote server, but not in our local DOI collection
+                        - Something VERY wrong happend, log that material and delete from local DOI collection to maintain cleaniness
+                    - If a mismatch is caused by different bibtex or changes in status
+                        - update the DOI record as needed, mark the valid field to False as needed.
+            2. Get all the materials that require an update
+                - A material require an update iff
+                    - It has updated its bibtex description
+                    - its Valid flag is turned to False
+            3. Get all material that require registration, if the flag should_register_new_DOI is set to True
+                - A material needs to be registered iff
+                    - It is not in the local DOI collection and that it is in the materials collection
 
-        Note, this function will by default sync with Elink and Explorer. To turn sync off, set self.sync to false
+        Note: This method should NOT send any PUSH request. It will only send GET request to sync, and if remote server
+        needs to be notified of a change in a record, the flag of valid should be turned to False
 
         Returns:
             generator of materials to retrieve/build DOI
         """
-        if self.sync:
+        if self.should_sync_from_remote_sites:
             self.logger.info("Start Syncing with E-Link")
             try:
                 self.sync_doi_collection()
@@ -101,17 +125,19 @@ class DoiBuilder(Builder):
         else:
             self.logger.info("Not syncing in this iteration")
 
-        self.logger.info("Start Finding materials to register/update")
-        new_materials_to_register = self.find_new_materials()
-
         to_update = self.adapter.doi_store.distinct(self.adapter.doi_store.key, criteria={"valid": False})
         self.logger.debug(f"Found [{len(to_update)}] materials that are invalid, need to be updated")
 
-        overall = new_materials_to_register + to_update  # limit the # of items returned
+        overall = to_update
+        if self.should_register_new_DOI:
+            self.logger.info("Start Finding materials to register/update")
+            new_materials_to_register = self.find_new_materials()
+            overall.extend(new_materials_to_register)
+
         total = len(overall)
         self.logger.debug(f"Capping the number of updates / register to [{self.send_size}]")
         overall = overall[:self.send_size]
-        # overall = to_update
+
         self.logger.info(f"[{total}] materials needs registered / updated. Updating the first [{len(overall)}] "
                          f"materials due to bandwidth limit")
 
@@ -167,7 +193,8 @@ class DoiBuilder(Builder):
         elsevier_post_data: List[dict] = []
 
         # group them
-        for item in items:
+        self.logger.debug("Grouping Received Items")
+        for item in tqdm(items):
             if item.get("elink_post_record", None) is not None:
                 elink_post_data.append(ELinkGetResponseModel.custom_to_dict(elink_record=item["elink_post_record"]))
             if item.get("elsevier_post_record", None) is not None:
@@ -215,7 +242,7 @@ class DoiBuilder(Builder):
 
     def finalize(self):
         self.logger.info(f"DOI store now has {self.adapter.doi_store.count()} records")
-        self.write_log(self.log_file_path)
+        self.write_log()
         super(DoiBuilder, self).finalize()
 
     """
@@ -245,10 +272,14 @@ class DoiBuilder(Builder):
         :return:
             None
         """
-        # find distinct mp_ids that are currently in the doi collection
-        all_keys = self.adapter.doi_store.distinct(field=self.adapter.doi_store.key)
+        # find distinct mp_ids that needs to be checked against remote servers
+        if self.should_sync_all_materials:
+            all_keys = self.adapter.materials_store.distinct(field=self.adapter.materials_store.key)
+        else:
+            all_keys = self.adapter.doi_store.distinct(field=self.adapter.doi_store.key)
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
+        # ask remote servers for those keys
         # ask elink if it has those DOI records. create a mapping of mp_id -> elink_Record
         elink_records = self.elink_adapter.get_multiple(mp_ids=all_keys, chunk_size=100)
         # osti_id -> elink_record
@@ -260,6 +291,8 @@ class DoiBuilder(Builder):
                 osti_ids=[r.osti_id for r in elink_records], chunk_size=100)
         except HTTPError:
             bibtex_dict = dict()
+
+        # now that i have all the data, I want to check these data against the ones I have in my local DOI collection
         # find all DOIs that are currently in the DOI collection
         doi_records: List[DOIRecordModel] = \
             [DOIRecordModel.parse_obj(i)
@@ -269,9 +302,13 @@ class DoiBuilder(Builder):
         to_delete: List[DOIRecordModel] = []
 
         # iterate through doi records to classify them as being updated or deleted
-        for doi_record in doi_records:
+        self.logger.debug("Syncing your local DOI collection")
+        for doi_record in tqdm(doi_records):
             osti_id = doi_record.get_osti_id()
             if osti_id not in elink_records_dict:
+                # if i found a record that is in my local DOI collection, but not in remote server
+                # something VERY bad happened, not sure why did this record get published onto remote server
+                # delete this record from local DOI collection to maintain cleanliness, but write this record out
                 to_delete.append(doi_record)
             else:
                 self.update_doi_record(doi_record=doi_record,
@@ -286,6 +323,8 @@ class DoiBuilder(Builder):
         #     self.adapter.doi_store.key: {'$in': [r.material_id for r in to_delete]}})
         self.logger.info(f"Updated [{len(to_update)}] records")
         self.logger.info(f"Removed [{len(to_delete)}] records")
+        if len(to_delete) > 0:
+            self.write_error_log([d.json() for d in to_delete])
 
     def generate_elink_model(self, material: MaterialModel) -> ELinkGetResponseModel:
         """
@@ -342,16 +381,27 @@ class DoiBuilder(Builder):
             to_update = True
             self.logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
             doi_record.set_status(elink_record.doi["@status"])
+
+        # update the bibtex if nessesary
+        robo = self.adapter.robocrys_store.query_one(criteria={self.adapter.robocrys_store.key: doi_record.material_id})
+        if robo is not None:
+            doi_record.bibtex = RoboCrysModel.parse_obj(robo).description
         if doi_record.bibtex != bibtex:
+            # this means that I have a new bibtex anx thus needs to update the remote server about the change
+            # setting doi_record.valid = False will notify the remote server
             to_update = True
             doi_record.bibtex = bibtex
+            doi_record.valid = False
+            self.logger.debug(f"Need to update bibtex for mp-id = [{doi_record.material_id}]")
+
         doi_record.last_validated_on = datetime.now()
         self.last_validated_on_count += 1
         if to_update:
             doi_record.last_updated = datetime.now()
             self.last_updated_count += 1
 
-    def write_log(self, log_file_path: Path):
+    def write_log(self):
+        log_file_path = self.log_folder_path / "mp_cite_log.txt"
         if not log_file_path.exists():
             log_file_path.parent.mkdir(parents=True, exist_ok=True)
             file = log_file_path.open('w+')
@@ -362,12 +412,24 @@ class DoiBuilder(Builder):
             created_at_count=self.created_at_count,
             elsevier_updated_on_count=self.elsevier_updated_on_count,
             last_validated_count=self.last_validated_on_count,
-            material_data_base_count = self.adapter.materials_store.count(),
+            material_data_base_count=self.adapter.materials_store.count(),
             doi_store_count=self.adapter.doi_store.count(),
-            bibtex_count=self.adapter.doi_store.count({"bibtex":{"$ne":None}}),
-            doi_completed=self.adapter.doi_store.count({"status": {"$eq":"COMPLETED"}}),
+            bibtex_count=self.adapter.doi_store.count({"bibtex": {"$ne": None}}),
+            doi_completed=self.adapter.doi_store.count({"status": {"$eq": "COMPLETED"}}),
             doi_pending=self.adapter.doi_store.count({"status": {"$eq": "PENDING"}}),
         )
         file.write(logcontent.json() + "\n")
         file.close()
         self.logger.debug(f"Log written to {log_file_path.as_posix()}")
+
+    def write_error_log(self, errors: List):
+        log_file_path = self.log_folder_path / "mp_cite_errors_log.txt"
+        if not log_file_path.exists():
+            log_file_path.parent.mkdir(parents=True, exist_ok=True)
+            file = log_file_path.open('w+')
+            file.close()
+        file = log_file_path.open("a+")
+        json.dump(errors, file, indent=4)
+        file.close()
+        self.logger.debug(f"Error Logs written to {log_file_path.as_posix()}")
+

@@ -9,6 +9,7 @@ from xmltodict import parse
 from dicttoxml import dicttoxml
 from xml.dom.minidom import parseString
 import json
+from tqdm import tqdm
 
 
 class Adapter(metaclass=ABCMeta):
@@ -123,7 +124,7 @@ class ELinkAdapter(Adapter):
             self.logger.debug(f"Syncing [{len(mp_ids)}] Elink Data in chunks of {chunk_size}")
             # chunck it up
             result = []
-            for i in range(0, len(mp_ids), chunk_size):
+            for i in tqdm(range(0, len(mp_ids), chunk_size)):
                 chunk = self.get_multiple_helper(mp_ids=mp_ids[i: i+chunk_size])
                 result.extend(chunk)
             return result
@@ -259,7 +260,7 @@ class ExplorerAdapter(Adapter):
             return self.get_multiple_bibtex_helper(osti_ids)
         else:
             result = dict()
-            for i in range(0, len(osti_ids), chunk_size):
+            for i in tqdm(range(0, len(osti_ids), chunk_size)):
                 try:
                     result.update(self.get_multiple_bibtex_helper(osti_ids[i: i+chunk_size]))
                 except HTTPError:
