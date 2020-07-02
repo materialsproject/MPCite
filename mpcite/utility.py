@@ -1,4 +1,4 @@
-from models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
+from mpcite.models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
     ExplorerGetJSONResponseModel, ElinkResponseStatusEnum
 from abc import abstractmethod, ABCMeta
 from typing import Union, List, Dict

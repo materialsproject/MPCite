@@ -1,0 +1,48 @@
+{
+  "osti": {
+    "elink": {
+      "endpoint": "",
+      "username": "",
+      "password": ""
+    },
+    "explorer": {
+      "endpoint": "",
+      "username": "",
+      "password": ""
+    }
+  },
+  "elsevier": {
+    "endpoint": "YOU CAN ONLY FILL IN THIS",
+    "username": "",
+    "password": "AND THIS if there is no user name"
+  },
+  "materials_collection": {
+    "host": "",
+    "port": "",
+    "collection_name": "",
+    "db": "",
+    "username": "",
+    "password": "",
+    "key": "task_id"
+  },
+  "dois_collection": {
+    "host": "",
+    "port": "",
+    "collection_name": "",
+    "db": "",
+    "username": "",
+    "password": "",
+    "key": "material_id"
+  },
+  "robocrys_collection": {
+     "host": "",
+    "port": "",
+    "collection_name": "",
+    "db": "",
+    "username": "",
+    "password": "",
+    "key": "material_id"
+  },
+  "max_doi_requests": 1000,
+  "sync": true
+}

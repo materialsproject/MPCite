@@ -1,14 +1,12 @@
 from maggma.core.builder import Builder
 from typing import Iterable, List, Dict, Union
-from utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
-from models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
-    ElsevierPOSTContainerModel
-import logging
+from mpcite.utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
+from mpcite.models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
+    ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel
 from urllib3.exceptions import HTTPError
 from datetime import datetime
-from models import RoboCrysModel
 from tqdm import tqdm
-from maggma.stores import Store
+from maggma.stores import Store, MongoStore
 
 
 class DoiBuilder(Builder):
@@ -40,7 +38,8 @@ class DoiBuilder(Builder):
                  doi_store: Store,
                  osti: OSTIModel,
                  max_doi_requests=1000,
-                 sync=True, **kwargs):
+                 sync=True,
+                 **kwargs):
         """
          connection with materials database
             1. establish connection with materials collection (Guaranteed online)
@@ -65,6 +64,7 @@ class DoiBuilder(Builder):
         self.materials_store = materials_store
         self.robocrys_store = robocrys_store
         self.doi_store = doi_store
+        self.osti = osti
         self.elink_adapter = ELinkAdapter(osti.elink)
         self.explorer_adapter = ExplorerAdapter(osti.explorer)
         self.elsevier_adapter = ElviserAdapter(osti.elsevier)
@@ -74,7 +74,6 @@ class DoiBuilder(Builder):
         self.sync = sync
 
         # set logging
-        self.logger = logging.getLogger("doi_builder")
         self.logger.debug("DOI Builder Succesfully instantiated")
 
     def get_items(self) -> Iterable:
@@ -262,7 +261,8 @@ class DoiBuilder(Builder):
         self.logger.info("Start Syncing all materials. Note that this operation will take very long, "
                          "you may terminate it at anypoint, nothing bad will happen. "
                          "You may turn off sync by setting the sync flag to False")
-        all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        # all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        all_keys = self.doi_store.distinct(field=self.doi_store.key)
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask remote servers for those keys
@@ -426,8 +426,57 @@ class DoiBuilder(Builder):
             return doi_entry['doi'].split('/')[-1]
 
     def as_dict(self) -> dict:
-        pass
+        return {
+            "materials_store": self.materials_store.as_dict(),
+            "robocrys_store": self.robocrys_store.as_dict(),
+            "doi_store": self.doi_store.as_dict(),
+            "osti": self.osti.dict(),
+            "max_doi_requests": self.max_doi_requests,
+            "sync": self.sync,
+        }
 
     @classmethod
-    def from_dict(cls, d):
-        pass
+    def from_dict(cls, d: dict):
+        assert "osti" in d, "Error: OSTI config not found"
+        assert "elsevier" in d, "Error: elsevier config not found"
+        assert "materials_collection" in d, "Error: materials_collection config not found"
+        assert "dois_collection" in d, "Error: dois_collection config not found"
+        assert "robocrys_collection" in d, "Error: robocrys_collection config not found"
+        assert "max_doi_requests" in d, "Error: max_doi_requests config not found"
+        assert "sync" in d, "Error: sync config not found"
+
+        elink = ConnectionModel.parse_obj(d["osti"]["elink"])
+        explorer = ConnectionModel.parse_obj(d["osti"]["explorer"])
+        elsevier = ConnectionModel.parse_obj(d["elsevier"])
+        osti = OSTIModel(elink=elink, explorer=explorer, elsevier=elsevier)
+        materials_store = cls._create_mongostore(config=d, config_collection_name="materials_collection")
+        robocrys_store = cls._create_mongostore(config=d, config_collection_name="robocrys_collection")
+        doi_store = cls._create_mongostore(config=d, config_collection_name="dois_collection")
+
+        max_doi_requests = d["max_doi_requests"]
+        sync = d["sync"]
+        bld = DoiBuilder(materials_store=materials_store,
+                         robocrys_store=robocrys_store,
+                         doi_store=doi_store,
+                         osti=osti,
+                         max_doi_requests=max_doi_requests,
+                         sync=sync)
+        return bld
+
+    @classmethod
+    def _create_mongostore(cls, config: dict, config_collection_name: str) -> MongoStore:
+        """
+        Helper method to create a mongoStore instance
+        :param config: configuration dictionary
+        :param config_collection_name: collection name to build the mongo store
+        :return:
+            MongoStore instance based on the configuration parameters
+        """
+        return MongoStore(database=config[config_collection_name]['db'],
+                          collection_name=config[config_collection_name]['collection_name'],
+                          host=config[config_collection_name]['host'],
+                          port=config[config_collection_name]["port"],
+                          username=config[config_collection_name]["username"],
+                          password=config[config_collection_name]["password"],
+                          key=config[config_collection_name]["key"] if "key" in config[config_collection_name] else
+                          "task_id")
