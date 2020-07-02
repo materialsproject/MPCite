@@ -18,7 +18,6 @@ itsdangerous==1.1.0
 Jinja2==3.0.0a1
 jsonschema==3.2.0
 latexcodec==2.0.0
-maggma==0.20.1.dev36+g6fc637b
 MarkupSafe==2.0.0a1
 mongogrant==0.3.1
 mongomock==3.19.0

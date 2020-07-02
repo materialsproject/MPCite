@@ -223,6 +223,7 @@ class DOIRecordModel(BaseModel):
     elsevier_updated_on: Union[datetime, None] = Field(None,
                                                        title="Date Elsevier is updated",
                                                        description="If None, means never uploaded to elsevier")
+    error: Union[None, str] = Field(default=None, description="None if no error, else error message")
     def get_status(self):
         return self.status
 

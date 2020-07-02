@@ -1,5 +1,4 @@
 import logging
-import os
 import yaml
 from pathlib import Path
 import os
@@ -19,18 +18,13 @@ elsevier = ConnectionModel.parse_obj(config["elsevier"])
 osti = OSTIModel(elink=elink, explorer=explorer, elsevier=elsevier)
 
 # decalre builder instance
-send_size = 0
-should_sync_from_remote_sites = True
+max_doi_requests = 0
+sync = True
 should_sync_all_materials = True  # if false, it will only sync the ones in existing local DOI collection
-should_register_new_DOI = False
-log_folder_path = Path(os.getcwd()).parent / "files"
 bld = DoiBuilder(oma,
                  osti,
-                 send_size=send_size,
-                 should_sync_from_remote_sites=should_sync_from_remote_sites,
-                 should_register_new_DOI=should_register_new_DOI,
-                 should_sync_all_materials=should_sync_all_materials,
-                 log_folder_path=log_folder_path.as_posix())
+                 max_doi_requests=max_doi_requests,
+                 sync=sync)
 
 # run program
 import time
