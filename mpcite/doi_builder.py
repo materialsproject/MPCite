@@ -2,7 +2,7 @@ from maggma.core.builder import Builder
 from typing import Iterable, List, Dict, Union
 from mpcite.utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
 from mpcite.models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
-    ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel
+    ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel, MongoConnectionModel
 from urllib3.exceptions import HTTPError
 from datetime import datetime
 from tqdm import tqdm
@@ -37,6 +37,7 @@ class DoiBuilder(Builder):
                  robocrys_store: Store,
                  doi_store: Store,
                  osti: OSTIModel,
+                 elsevier: ConnectionModel,
                  max_doi_requests=1000,
                  sync=True,
                  **kwargs):
@@ -65,9 +66,10 @@ class DoiBuilder(Builder):
         self.robocrys_store = robocrys_store
         self.doi_store = doi_store
         self.osti = osti
+        self.elsevier = elsevier
         self.elink_adapter = ELinkAdapter(osti.elink)
         self.explorer_adapter = ExplorerAdapter(osti.explorer)
-        self.elsevier_adapter = ElviserAdapter(osti.elsevier)
+        self.elsevier_adapter = ElviserAdapter(self.elsevier)
 
         # set flags
         self.max_doi_requests = max_doi_requests
@@ -426,11 +428,13 @@ class DoiBuilder(Builder):
             return doi_entry['doi'].split('/')[-1]
 
     def as_dict(self) -> dict:
+        print(self.materials_store.as_dict())
         return {
-            "materials_store": self.materials_store.as_dict(),
-            "robocrys_store": self.robocrys_store.as_dict(),
-            "doi_store": self.doi_store.as_dict(),
+            "materials_collection": self.materials_store.as_dict(),
+            "robocrys_collection": self.robocrys_store.as_dict(),
+            "dois_collection": self.doi_store.as_dict(),
             "osti": self.osti.dict(),
+            "elsevier": self.elsevier.dict(),
             "max_doi_requests": self.max_doi_requests,
             "sync": self.sync,
         }
@@ -448,7 +452,7 @@ class DoiBuilder(Builder):
         elink = ConnectionModel.parse_obj(d["osti"]["elink"])
         explorer = ConnectionModel.parse_obj(d["osti"]["explorer"])
         elsevier = ConnectionModel.parse_obj(d["elsevier"])
-        osti = OSTIModel(elink=elink, explorer=explorer, elsevier=elsevier)
+        osti = OSTIModel(elink=elink, explorer=explorer)
         materials_store = cls._create_mongostore(config=d, config_collection_name="materials_collection")
         robocrys_store = cls._create_mongostore(config=d, config_collection_name="robocrys_collection")
         doi_store = cls._create_mongostore(config=d, config_collection_name="dois_collection")
@@ -459,6 +463,7 @@ class DoiBuilder(Builder):
                          robocrys_store=robocrys_store,
                          doi_store=doi_store,
                          osti=osti,
+                         elsevier=elsevier,
                          max_doi_requests=max_doi_requests,
                          sync=sync)
         return bld
@@ -472,11 +477,11 @@ class DoiBuilder(Builder):
         :return:
             MongoStore instance based on the configuration parameters
         """
-        return MongoStore(database=config[config_collection_name]['db'],
-                          collection_name=config[config_collection_name]['collection_name'],
-                          host=config[config_collection_name]['host'],
-                          port=config[config_collection_name]["port"],
-                          username=config[config_collection_name]["username"],
-                          password=config[config_collection_name]["password"],
-                          key=config[config_collection_name]["key"] if "key" in config[config_collection_name] else
-                          "task_id")
+        mong_connection_model = MongoConnectionModel.parse_obj(config[config_collection_name])
+        return MongoStore(database=mong_connection_model.database,
+                          collection_name=mong_connection_model.collection_name,
+                          host=mong_connection_model.host,
+                          port=mong_connection_model.port,
+                          username=mong_connection_model.username,
+                          password=mong_connection_model.password,
+                          key=mong_connection_model.key)

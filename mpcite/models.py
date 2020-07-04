@@ -5,6 +5,16 @@ from datetime import datetime
 from enum import Enum
 
 
+class MongoConnectionModel(BaseModel):
+    database: str = Field(...)
+    collection_name: str = Field(...)
+    host: str = Field(...)
+    port: int = Field(...)
+    username: str = Field(...)
+    password: str = Field(...)
+    key: str = Field(default="task_id")
+
+
 class ConnectionModel(BaseModel):
     endpoint: str = Field(..., title="URL Endpoint of the connection")
     username: str = Field(..., title="User Name")
@@ -14,7 +24,6 @@ class ConnectionModel(BaseModel):
 class OSTIModel(BaseModel):
     elink: ConnectionModel = Field(..., title="Elink endpoint")
     explorer: ConnectionModel = Field(..., title="Explorer endpoint")
-    elsevier: ConnectionModel = Field(..., title="Elsevier endpoint")
 
 
 class RoboCrysModel(BaseModel):
@@ -96,7 +105,7 @@ class MaterialModel(BaseModel):
     last_updated: datetime = Field(None, title="timestamp for the most recent calculation")
     created_at: datetime = Field(None,
                                  description="creation time for this material defined by when the first structure "
-                                             "optimization calculation was run" )
+                                             "optimization calculation was run")
     task_ids: List[str] = Field([], title="List of task ids that created this material")
     task_id: str = Field('', title="task id for this material. Also called the material id")
     origins: List[Origin]
@@ -224,6 +233,7 @@ class DOIRecordModel(BaseModel):
                                                        title="Date Elsevier is updated",
                                                        description="If None, means never uploaded to elsevier")
     error: Union[None, str] = Field(default=None, description="None if no error, else error message")
+
     def get_status(self):
         return self.status
 
@@ -258,7 +268,7 @@ class ElsevierPOSTContainerModel(BaseModel):
     authors: List[str] = Field(default=['Kristin Persson'])
     url: str = Field(...)
     type: str = Field(default='dataset')
-    dateAvailable: str = Field(default= datetime.now().date().isoformat().__str__())
+    dateAvailable: str = Field(default=datetime.now().date().isoformat().__str__())
     dateCreated: str = Field(default=datetime.now().date().isoformat().__str__())
     version: str = Field(default="1.0.0")
     funding: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
@@ -284,7 +294,7 @@ class ElsevierPOSTContainerModel(BaseModel):
         return 'https://materialsproject.org/materials/%s' % mp_id
 
     @classmethod
-    def get_keywords(cls, material:MaterialModel):
+    def get_keywords(cls, material: MaterialModel):
         if material.bandstructure is not None:
             return ['crystal structure', material.formula_pretty, material.chemsys, 'electronic bandstructure']
         else:
@@ -351,15 +361,15 @@ class LogContent(BaseModel):
     last_validated_count: int = Field(default=0,
                                       title="number of DOIs validated",
                                       description="Number of DOIs that are validated in this run")
-    material_data_base_count:int = Field(default=0,
-                                         title="Total number of materials in the database",
-                                         description="Total number of materials in the database")
-    doi_store_count:int = Field(default=0,
-                                title="Number of DOIs that are in the DOI collection",
-                                description="Number of DOIs that are in the DOI collection")
-    bibtex_count:int = Field(default=0,
-                             title="Number of DOIs that has bibtex",
-                             description="Number of DOIs that has bibtex ")
+    material_data_base_count: int = Field(default=0,
+                                          title="Total number of materials in the database",
+                                          description="Total number of materials in the database")
+    doi_store_count: int = Field(default=0,
+                                 title="Number of DOIs that are in the DOI collection",
+                                 description="Number of DOIs that are in the DOI collection")
+    bibtex_count: int = Field(default=0,
+                              title="Number of DOIs that has bibtex",
+                              description="Number of DOIs that has bibtex ")
     doi_completed: int = Field(default=0,
                                title="Number of DOIs Completed",
                                description="Number of DOIs that has a COMPLETED status")
