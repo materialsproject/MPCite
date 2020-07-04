@@ -27,7 +27,6 @@ def main():
     settings = json.load(config_file.open("r"))
 
     bld = DoiBuilder.from_dict(d=settings)
-    print(args.debug)
     tic = time.perf_counter()
     if args.debug is not None and args.debug:
         bld.run(log_level=logging.DEBUG)

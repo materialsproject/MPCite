@@ -125,15 +125,17 @@ class DoiBuilder(Builder):
             overall.extend(new_materials_to_register)
 
         total = len(overall)
+
         self.logger.debug(f"Capping the number of updates / register to [{self.max_doi_requests}]")
         overall = overall[:self.max_doi_requests]
 
         self.logger.info(f"[{total}] materials needs registered / updated. Updating the first [{len(overall)}] "
                          f"materials due to bandwidth limit")
+        materials = self.materials_store.query(criteria={self.materials_store.key: {"$in": overall}})
+        for m in materials:
+            yield m
 
-        return overall
-
-    def process_item(self, item: str) -> Union[None, dict]:
+    def process_item(self, item) -> Union[None, dict]:
         """
         construct a dict of all updates necessary. ex:
         {
@@ -146,16 +148,14 @@ class DoiBuilder(Builder):
         Returns:
             dict: a submitted DOI
         """
-        mp_id = item
-        self.logger.info("Processing document with task_id = {}".format(mp_id))
         try:
-            material = MaterialModel.parse_obj(
-                self.materials_store.query_one(criteria={self.materials_store.key: mp_id}))
+            material = MaterialModel.parse_obj(item)
+            self.logger.info("Processing document with task_id = {}".format(material.task_id))
             elink_post_record = self.generate_elink_model(material=material)
             elsevier_post_record = self.generate_elsevier_model(material=material)
             return {"elink_post_record": elink_post_record,
                     "elsevier_post_record": elsevier_post_record,
-                    "mp_id": mp_id}
+                    "mp_id": material.task_id}
         except Exception as e:
             self.logger.error(f"Skipping [{item}], Error: {e}")
 
