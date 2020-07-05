@@ -12,3 +12,4 @@ mpcite.egg-info
 .DS_store
 files/config.json
 .pytest_cache
+.ipynb_checkpoints

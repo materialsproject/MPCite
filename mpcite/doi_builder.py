@@ -264,7 +264,8 @@ class DoiBuilder(Builder):
                          "you may terminate it at anypoint, nothing bad will happen. "
                          "You may turn off sync by setting the sync flag to False")
         # all_keys = self.materials_store.distinct(field=self.materials_store.key)
-        all_keys = self.doi_store.distinct(field=self.doi_store.key)
+        all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        all_keys = all_keys[:100]
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask remote servers for those keys
@@ -282,10 +283,10 @@ class DoiBuilder(Builder):
 
         # now that i have all the data, I want to check these data against the ones I have in my local DOI collection
         # find all DOIs that are currently in the DOI collection
+
         doi_records: List[DOIRecordModel] = \
             [DOIRecordModel.parse_obj(i)
              for i in self.doi_store.query(criteria={self.doi_store.key: {"$in": all_keys}})]
-
         to_update: List[DOIRecordModel] = []
         records_with_errors: List[DOIRecordModel] = []
 
@@ -357,6 +358,7 @@ class DoiBuilder(Builder):
             None
         """
         to_update = False
+
         if doi_record.get_osti_id() != elink_record.osti_id:
             to_update = True
             # this condition should never be entered, but for the sake of extreme caution
@@ -365,20 +367,19 @@ class DoiBuilder(Builder):
             self.logger.debug(msg)
             doi_record.doi = elink_record.osti_id
         if doi_record.get_status() != elink_record.doi["@status"]:
+
             to_update = True
             self.logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
             doi_record.set_status(elink_record.doi["@status"])
-
         # update the bibtex if nessesary
         robo = self.robocrys_store.query_one(criteria={self.robocrys_store.key: doi_record.material_id})
-        if robo is not None:
-            doi_record.bibtex = RoboCrysModel.parse_obj(robo).description
-        explorer_bibtex = bibtex_dict.get(doi_record.get_osti_id, None)
-        if doi_record.bibtex != explorer_bibtex:
+        robo_bibtex = RoboCrysModel.parse_obj(robo).description if robo is not None else None
+        explorer_bibtex = bibtex_dict.get(doi_record.get_osti_id(), None)
+        if robo_bibtex is not None and robo_bibtex != explorer_bibtex:
             # this means that I have a new bibtex anx thus needs to update the remote server about the change
             # setting doi_record.valid = False will notify the remote server
             to_update = True
-            doi_record.bibtex = bibtex_dict
+            doi_record.bibtex = robo_bibtex
             doi_record.valid = False
             self.logger.debug(f"Need to update bibtex for mp-id = [{doi_record.material_id}]")
 
@@ -428,7 +429,6 @@ class DoiBuilder(Builder):
             return doi_entry['doi'].split('/')[-1]
 
     def as_dict(self) -> dict:
-        print(self.materials_store.as_dict())
         return {
             "materials_collection": self.materials_store.as_dict(),
             "robocrys_collection": self.robocrys_store.as_dict(),
