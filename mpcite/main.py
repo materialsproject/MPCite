@@ -1,6 +1,6 @@
 import argparse
 # from mpcite.doi_builder import DoiBuilder
-from doi_builder import DoiBuilder
+from mpcite.doi_builder import DoiBuilder
 from pathlib import Path
 import json
 import logging

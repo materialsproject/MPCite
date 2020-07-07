@@ -1,11 +1,8 @@
 from maggma.core.builder import Builder
 from typing import Iterable, List, Dict, Union, Set, Optional
-from utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
-from models import DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
+from mpcite.utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
+from mpcite.models import DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
     ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel, DOIRecordStatusEnum
-# from mpcite.utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
-# from mpcite.models import DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
-#     ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel
 from urllib3.exceptions import HTTPError
 from datetime import datetime
 from tqdm import tqdm
@@ -286,8 +283,7 @@ class DoiBuilder(Builder):
         self.logger.info("Start Syncing all materials. Note that this operation will take very long, "
                          "you may terminate it at anypoint, nothing bad will happen. "
                          "You may turn off sync by setting the sync flag to False")
-        # all_keys = self.materials_store.distinct(field=self.materials_store.key)
-        all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        all_keys = self.doi_store.distinct(field=self.doi_store.key)
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask remote servers for those keys
@@ -407,6 +403,12 @@ class DoiBuilder(Builder):
             self.logger.debug(f"[{doi_record.material_id}]: Updates from Robo collection")
             to_update = True
             doi_record.valid = False
+        else:
+            if doi_record.valid is False:
+                # and dont forget to set it back
+                self.logger.debug(f"[{doi_record.material_id}] is now valid, setting Valid to True")
+                doi_record.valid = True
+                to_update = True
 
         doi_record.last_validated_on = datetime.now()
         if to_update:
