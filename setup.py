@@ -16,11 +16,6 @@ setup(
     author_email=metadata['email'],
     url=metadata['url'],
     packages=find_packages(),
-    install_requires=[
-        'dicttoxml', 'latexcodec', 'monty', 'plotly', 'pybtex', 'pymongo',
-        'pytz', 'PyYAML', 'requests', 'six', 'xmltodict', 'tqdm', 'colorlover',
-        'pyspin', 'pydantic'
-    ],
     license='MIT',
     keywords=['materials', 'citation', 'framework', 'digital object identifiers'],
     # scripts=glob.glob(os.path.join(SETUP_PTH, "scripts", "*")),
