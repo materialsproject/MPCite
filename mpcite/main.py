@@ -1,9 +1,11 @@
 import argparse
-from mpcite.doi_builder import DoiBuilder
+# from mpcite.doi_builder import DoiBuilder
+from doi_builder import DoiBuilder
 from pathlib import Path
 import json
 import logging
 import time
+from monty.json import MontyDecoder
 
 
 def str2bool(v):
@@ -24,9 +26,7 @@ def main():
     args = parser.parse_args()
     assert args.config_file_path is not None, "Please provide a configuration file path"
     config_file = Path(args.config_file_path)
-    settings = json.load(config_file.open("r"))
-
-    bld = DoiBuilder.from_dict(d=settings)
+    bld: DoiBuilder = json.load(config_file.open("r"), cls=MontyDecoder)
     tic = time.perf_counter()
     if args.debug is not None and args.debug:
         bld.run(log_level=logging.DEBUG)

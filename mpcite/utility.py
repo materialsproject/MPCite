@@ -1,4 +1,6 @@
-from mpcite.models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
+# from mpcite.models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
+#     ExplorerGetJSONResponseModel, ElinkResponseStatusEnum
+from models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
     ExplorerGetJSONResponseModel, ElinkResponseStatusEnum
 from abc import abstractmethod, ABCMeta
 from typing import Union, List, Dict
@@ -10,6 +12,7 @@ from dicttoxml import dicttoxml
 from xml.dom.minidom import parseString
 import json
 from tqdm import tqdm
+import bibtexparser
 
 
 class Adapter(metaclass=ABCMeta):
@@ -17,6 +20,7 @@ class Adapter(metaclass=ABCMeta):
         self.config = config
         logging.getLogger("urllib3").setLevel(logging.ERROR)  # forcefully disable logging from urllib3
         logging.getLogger("dicttoxml").setLevel(logging.ERROR)  # forcefully disable logging from dicttoxml
+        logging.getLogger("bibtexparser.bparser").setLevel(logging.ERROR)
         self.logger = logging.getLogger(__name__)
 
     @abstractmethod
@@ -121,11 +125,11 @@ class ELinkAdapter(Adapter):
 
     def get_multiple(self, mp_ids: List[str], chunk_size=10) -> List[ELinkGetResponseModel]:
         if len(mp_ids) > chunk_size:
-            self.logger.debug(f"Syncing [{len(mp_ids)}] Elink Data in chunks of {chunk_size}")
+            self.logger.info(f"Found and downloading [{len(mp_ids)}] Elink Data matches in chunks of {chunk_size}")
             # chunck it up
             result = []
             for i in tqdm(range(0, len(mp_ids), chunk_size)):
-                chunk = self.get_multiple_helper(mp_ids=mp_ids[i: i+chunk_size])
+                chunk = self.get_multiple_helper(mp_ids=mp_ids[i: i + chunk_size])
                 result.extend(chunk)
             return result
         else:
@@ -152,8 +156,8 @@ class ELinkAdapter(Adapter):
                     result.append(ELinkGetResponseModel.parse_obj(parse(elink_response_xml)["records"]["record"]))
                 else:
                     result: List[ELinkGetResponseModel] = [ELinkGetResponseModel.parse_obj(record) for record in
-                                                   parse(elink_response_xml)["records"]["record"]]
-            except:
+                                                           parse(elink_response_xml)["records"]["record"]]
+            except Exception:
                 # self.logger.error(f"Cannot parse returned xml: \n{elink_response_xml}")
                 self.logger.error("Cannot parse returned xml")
             return result
@@ -189,7 +193,7 @@ class ELinkAdapter(Adapter):
         result: List[DOIRecordModel] = []
         for response in responses:
             if response.status == ElinkResponseStatusEnum.SUCCESS:
-                result.append(DOIRecordModel.from_elink_response_record(elink_response_record=response))
+                result.append(response.generate_doi_record())
             else:
                 # will provide more accurate prompt for known failures
                 if response.status_message == ELinkAdapter.INVALID_URL_STATUS_MESSAGE:
@@ -239,7 +243,7 @@ class ExplorerAdapter(Adapter):
             r = requests.get(url=self.config.endpoint, auth=(self.config.username, self.config.password),
                              params=payload,
                              headers=header)
-        except:
+        except Exception:
             raise HTTPError(f"Failed to request for OSTI ID = {osti_id}")
         if r.status_code == 200:
             if r.content.decode() == '':
@@ -253,7 +257,7 @@ class ExplorerAdapter(Adapter):
         Get mulitple bibtex using concatination of 1 OR 2 OR 3
         Return a dictionary of MP_ID -> Bibtex
         """
-        self.logger.info(f"Syncing [{len(osti_ids)}] Bibtex records in chunk of {chunk_size}")
+        self.logger.info(f"Found and downloading [{len(osti_ids)}] Bibtex records in chunk of {chunk_size}")
         if len(osti_ids) == 0:
             return dict()
         elif len(osti_ids) < chunk_size:
@@ -262,9 +266,9 @@ class ExplorerAdapter(Adapter):
             result = dict()
             for i in tqdm(range(0, len(osti_ids), chunk_size)):
                 try:
-                    result.update(self.get_multiple_bibtex_helper(osti_ids[i: i+chunk_size]))
+                    result.update(self.get_multiple_bibtex_helper(osti_ids[i: i + chunk_size]))
                 except HTTPError:
-                    self.logger.error(f"Failed to update osti_ids [{osti_ids[i: i+chunk_size]}], skipping")
+                    self.logger.error(f"Failed to update osti_ids [{osti_ids[i: i + chunk_size]}], skipping")
             return result
 
     def get_multiple_bibtex_helper(self, osti_ids: List[str]) -> Dict[str, str]:
@@ -286,36 +290,22 @@ class ExplorerAdapter(Adapter):
         else:
             raise HTTPError(f"Query for OSTI IDs = {osti_ids} failed")
 
-    def append_bibtex(self, doi_record: DOIRecordModel) -> bool:
-        """
-        find bibtex for a DOI record, return true if success, false otherwise
-        :param doi_record: DOI record to find bibtex
-        :return:
-            True if sucess, false otherwise
-        """
-        if doi_record.get_osti_id() != '' or doi_record.get_osti_id() is not None:
-            try:
-                doi_record.bibtex = self.get_bibtex(doi_record.get_osti_id())
-                return True
-            except HTTPError as e:
-                self.logger.error(f"Cannot get bibtex for {doi_record.material_id}. Error: {e}")
-                return False
-
-    def parse_bibtex(self, data: str) -> Dict[str, str]:
+    def parse_bibtex(self, data: str) -> Dict:
         """
         String of bibtexes in the format of @article{.....}\n@article{.....}
         parse them into a dictionary of osti-> bibtex
         :param data:
         :return:
-            a dictionary of osti-> bibtex
+            a dictionary of osti-> bibtex_entry
         """
+
+        new_bib = [line for line in data.splitlines() if "= ," not in line]
+        new_bib = "\n".join(new_bib)
+        bib_db: bibtexparser.bibdatabase.BibDatabase = bibtexparser.loads(new_bib)
         result = dict()
-        sep = "}\n"
-        contents = [d + sep for d in data.split(sep=sep)][:-1]
-        for bibtex in contents:
-            osti_id = self.find_osti_id_from_bibtex(bibtex=bibtex)
-            if osti_id is not None:
-                result[osti_id] = bibtex
+        for entry in bib_db.entries:
+            osti_id = entry["ID"].split("_")[1]
+            result[osti_id] = entry
         return result
 
     @classmethod
@@ -334,7 +324,6 @@ class ExplorerAdapter(Adapter):
 
 
 class ElviserAdapter(Adapter):
-
     def post(self, data: dict):
         if data.get("doi", '') == '':
             self.logger.debug(f"No Elsevier POST for {data.get('identifier')} because it does not have DOI yet")

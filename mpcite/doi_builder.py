@@ -1,12 +1,18 @@
 from maggma.core.builder import Builder
-from typing import Iterable, List, Dict, Union
-from mpcite.utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
-from mpcite.models import OSTIModel, DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
-    ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel, MongoConnectionModel
+from typing import Iterable, List, Dict, Union, Set, Optional
+from utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
+from models import DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
+    ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel, DOIRecordStatusEnum
+# from mpcite.utility import ELinkAdapter, ExplorerAdapter, ElviserAdapter
+# from mpcite.models import DOIRecordModel, ELinkGetResponseModel, MaterialModel, ELinkPostResponseModel, \
+#     ElsevierPOSTContainerModel, ConnectionModel, RoboCrysModel
 from urllib3.exceptions import HTTPError
 from datetime import datetime
 from tqdm import tqdm
-from maggma.stores import Store, MongoStore
+from maggma.stores import Store
+from monty.json import MontyDecoder
+import json
+import bibtexparser
 
 
 class DoiBuilder(Builder):
@@ -36,7 +42,8 @@ class DoiBuilder(Builder):
                  materials_store: Store,
                  robocrys_store: Store,
                  doi_store: Store,
-                 osti: OSTIModel,
+                 elink: ConnectionModel,
+                 explorer: ConnectionModel,
                  elsevier: ConnectionModel,
                  max_doi_requests=1000,
                  sync=True,
@@ -65,10 +72,11 @@ class DoiBuilder(Builder):
         self.materials_store = materials_store
         self.robocrys_store = robocrys_store
         self.doi_store = doi_store
-        self.osti = osti
         self.elsevier = elsevier
-        self.elink_adapter = ELinkAdapter(osti.elink)
-        self.explorer_adapter = ExplorerAdapter(osti.explorer)
+        self.elink = elink
+        self.explorer = explorer
+        self.elink_adapter = ELinkAdapter(elink)
+        self.explorer_adapter = ExplorerAdapter(explorer)
         self.elsevier_adapter = ElviserAdapter(self.elsevier)
 
         # set flags
@@ -83,28 +91,33 @@ class DoiBuilder(Builder):
         Get a list of material that requires registration or update with remote servers
 
         Steps:
-            1. Perform synchronization if sync is True
-                - Note that this is a ONE WAY sync, it only pulls data from remote server and checks whether local data
-                matches
-                - If a mismatch happened
-                    - if a mismatch is caused by there is this material from remote server, but not in our local DOI
-                    collection
-                        - Something VERY wrong happend, log that material and append error field
-                    - If a mismatch is caused by different bibtex or changes in status
-                        - update the DOI record as needed, mark the valid field to False as needed.
-            2. Get all the materials that require an update
-                - A material require an update iff
-                    - It has updated its bibtex description
-                    - its Valid flag is turned to False
-            3. Get all material that require registration, if the flag should_register_new_DOI is set to True
-                - A material needs to be registered iff
-                    - It is not in the local DOI collection and that it is in the materials collection
+            1. Synchronization
+                - Goal: Generate State Machine for each DOI Record that satisfy the below properties
+                    a. this entry is detected in local collection, but not in remote server
+                        - this means that there's something VERY wrong happended, log error for this material
+                    b. If there is a mismatch for different bibtex from robocrys store
+                        - set VALID to False, this will implicitly move this material to the update queue
+                    c. If there is a mismatch for the STATUS when pulling data from server
+                        - update local DOI collection. do NOT set VALID to False since you don't need to update
+                        the server about this, server told you about this change
+            2. Populate Update Queue
+                - Goal: Generate a list of record from local DOI collection that requires an update
+                    a. we know which record needs an update because we have constructed a State Machine with VALID=False
+                    for each of the material that requires an update
+                    b. The flag VALID also allow users to manually update a material -- if you set VALID to false,
+                    this material will be put onto the update queue
+            3. Populate New Materials Queue
+                - Goal: find unregistered materials to register
+                    a. only execute this if the Update Queue has not exceeded 1000 items, which is the limit
+                    where OSTI can process it per 6 hours
+            4. Cap the number of materials to 1000
+                - This is a safety measure, above 1000, OSTI will fail, and things gets complicated
 
         Note: This method should NOT send any PUSH request. It will only send GET request to sync, and if remote server
         needs to be notified of a change in a record, the flag of valid should be turned to False
 
         Returns:
-            generator of materials to retrieve/build DOI
+            a list of State for each record that needs an update / registration
         """
         if self.sync:
             self.logger.info("Start Syncing with E-Link")
@@ -117,27 +130,31 @@ class DoiBuilder(Builder):
         else:
             self.logger.info("Not syncing in this iteration")
 
-        to_update = self.doi_store.distinct(self.doi_store.key, criteria={"valid": False})
-        self.logger.debug(f"Found [{len(to_update)}] materials that are invalid, need to be updated")
+        update_ids = self.doi_store.distinct(self.doi_store.key, criteria={"valid": False})
+        self.logger.debug(f"Found [{len(update_ids)}] materials that are invalid, need to be updated")
 
-        overall = to_update
+        overall_ids = []
+        new_materials_ids: Set[str] = set()
+        if len(overall_ids) < self.max_doi_requests:
+            failed_ids = set(self.doi_store.distinct(self.doi_store.key, criteria={"status": "FAILURE"})) - \
+                         set(overall_ids)
+            overall_ids.extend(failed_ids)
+        if len(overall_ids) < self.max_doi_requests:
+            new_materials_ids = set(self.materials_store.distinct(field=self.materials_store.key)) - \
+                                set(self.doi_store.distinct(field=self.doi_store.key))
+            overall_ids.extend(new_materials_ids)
+        overall_ids = overall_ids[:self.max_doi_requests]
+        for ID in overall_ids:
+            if ID in new_materials_ids:
+                new_doi_record = DOIRecordModel(
+                    material_id=ID,
+                    status="INIT",
+                    valid=False)
+                yield new_doi_record
+            else:
+                yield DOIRecordModel.parse_obj(self.doi_store.query_one(criteria={self.doi_store.key: ID}))
 
-        if len(overall) < self.max_doi_requests:
-            new_materials_to_register = self.find_new_materials()
-            overall.extend(new_materials_to_register)
-
-        total = len(overall)
-
-        self.logger.debug(f"Capping the number of updates / register to [{self.max_doi_requests}]")
-        overall = overall[:self.max_doi_requests]
-
-        self.logger.info(f"[{total}] materials needs registered / updated. Updating the first [{len(overall)}] "
-                         f"materials due to bandwidth limit")
-        materials = self.materials_store.query(criteria={self.materials_store.key: {"$in": overall}})
-        for m in materials:
-            yield m
-
-    def process_item(self, item) -> Union[None, dict]:
+    def process_item(self, item: DOIRecordModel) -> Union[None, dict]:
         """
         construct a dict of all updates necessary. ex:
         {
@@ -151,18 +168,20 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         try:
-            material = MaterialModel.parse_obj(item)
+            material = self.materials_store.query_one(criteria={self.materials_store.key: item.material_id})
+            material = MaterialModel.parse_obj(material)
             self.logger.info("Processing document with task_id = {}".format(material.task_id))
             elink_post_record = self.generate_elink_model(material=material)
             elsevier_post_record = self.generate_elsevier_model(material=material)
             return {"elink_post_record": elink_post_record,
                     "elsevier_post_record": elsevier_post_record,
-                    "mp_id": material.task_id}
+                    "doi_record": item}
         except Exception as e:
-            self.logger.error(f"Skipping [{item}], Error: {e}")
+            self.logger.error(f"Skipping [{item.material_id}], Error: {e}")
 
     def update_targets(self, items: List[Dict[str, Union[ELinkGetResponseModel,
-                                                         ElsevierPOSTContainerModel]]]):
+                                                         ElsevierPOSTContainerModel,
+                                                         DOIRecordModel]]]):
         """
         update all items
         example items:
@@ -183,10 +202,13 @@ class DoiBuilder(Builder):
         self.logger.info(f"Start Updating/registering {len(items)} items")
         elink_post_data: List[dict] = []
         elsevier_post_data: List[dict] = []
+        records_dict: Dict[str, DOIRecordModel] = dict()
 
         # group them
         self.logger.debug("Grouping Received Items")
         for item in tqdm(items):
+            doi_record: DOIRecordModel = item["doi_record"]
+            records_dict[doi_record.material_id] = doi_record
             if item.get("elink_post_record", None) is not None:
                 elink_post_data.append(ELinkGetResponseModel.custom_to_dict(elink_record=item["elink_post_record"]))
             if item.get("elsevier_post_record", None) is not None:
@@ -194,35 +216,37 @@ class DoiBuilder(Builder):
 
         # post it
         try:
-            failed_count = 0
 
             # Elink POST
             self.logger.info("POST-ing to Elink")
             data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
             elink_post_responses: List[ELinkPostResponseModel] = self.elink_adapter.post(data=data)
-            to_update: List[DOIRecordModel] = self.elink_adapter.process_elink_post_responses(
-                responses=elink_post_responses)
-            failed_count += len(elink_post_data) - len(to_update)
+            self.logger.info("Processing Elink Response")
+            for elink_post_response in tqdm(elink_post_responses):
+                record: DOIRecordModel = records_dict[elink_post_response.accession_num]
+                record.doi = elink_post_response.doi["#text"]
+                record.status = elink_post_response.doi["@status"]
+                record.valid = True
+                record.last_validated_on = datetime.now()
+                record.last_updated = datetime.now()
+                record.error = "Unkonwn error happend when pushing to ELINK. " if record.status == "Failure" else None
 
-            # elsevier POST
-            to_update_dict: Dict[str, DOIRecordModel] = dict()  # mp_id -> DOIRecord
-            for doirecord in to_update:
-                to_update_dict[doirecord.material_id] = doirecord
-            self.logger.debug("POSTing Elsevier data")
-            for post_data in elsevier_post_data:
-                # if elink post was successful, then it has the doi, add it to elsevier's
-                if post_data["identifier"] in to_update_dict:
-                    post_data["doi"] = to_update_dict[post_data["identifier"]].doi
+            # now post to elsevier
+            self.logger.info("POSTing to elsevier")
+            for elsevier in tqdm(elsevier_post_data):
+                mp_id = elsevier["identifier"]
+                if mp_id in records_dict and records_dict[mp_id].valid:
+                    elsevier["doi"] = records_dict[mp_id].doi
                     try:
-                        self.elsevier_adapter.post(data=post_data)
-                        to_update_dict[post_data["identifier"]].elsevier_updated_on = datetime.now()
+                        self.elsevier_adapter.post(data=elsevier)
+                        records_dict[mp_id].elsevier_updated_on = datetime.now()
                     except Exception as e:
                         self.logger.error(msg="Unable to post because {}".format(e.__str__()))
+            self.logger.info("Updating local DOI collection")
+            self.doi_store.update(docs=[r.dict() for r in records_dict.values()], key=self.doi_store.key)
+            self.logger.info(f"Attempted to update / register [{len(records_dict)}] record(s) "
+                             f"- [{len(records_dict) - len(elink_post_responses)}] Failed")
 
-            # update doi collection
-            self.doi_store.update(docs=[r.dict() for r in to_update], key=self.doi_store.key)
-            self.logger.info(f"Attempted to update / register [{len(to_update)}] record(s) "
-                             f"- [{len(to_update) - failed_count}] Succeeded - [{failed_count}] Failed")
         except HTTPError as e:
             self.logger.error(f"Failed to POST, no updates done. Error: {e}")
         except Exception as e:
@@ -236,28 +260,27 @@ class DoiBuilder(Builder):
     Utility functions
     """
 
-    def find_new_materials(self) -> List[str]:
-        """
-        find new materials to add by computing the difference between the MP and DOI collection keys
-
-        :return:
-            list of mp_id
-        """
-        materials = set(self.materials_store.distinct(self.materials_store.key))
-        dois = set(self.doi_store.distinct(self.doi_store.key))
-        to_add = list(materials - dois)
-        self.logger.debug(f"Found [{len(to_add)}] new Materials to register")
-        return to_add
-
     def sync_doi_collection(self):
         """
+        Goal: Synchronize DOI Collection against remote servers
+
+        Procedure:
+            1. pull data from Elink and Explorer
+            2. compare data against local DOI collection
+                - if there is a mismatch
+                    - if there is a mimatch in Status
+                        - update local DOI record's status
+                    - if there is a mismatch in Bibtex
+                        - set VALID = False, implicitly moving its state to False for later updates
+                - update the local DOI collection
+            3. return a list of mp_ids that have their VALID=False set.
+
         Sync DOI collection, set the status, and bibtext field,
         double check whether the DOI field matches
-        If an entry is in the DOI collection but is not in E-Link, remove it
 
         NOTE, this function might take a while to execute
         :return:
-            None
+            a list of mp_ids that have its state set to VALID=False
         """
         # find distinct mp_ids that needs to be checked against remote servers
         self.logger.info("Start Syncing all materials. Note that this operation will take very long, "
@@ -265,7 +288,6 @@ class DoiBuilder(Builder):
                          "You may turn off sync by setting the sync flag to False")
         # all_keys = self.materials_store.distinct(field=self.materials_store.key)
         all_keys = self.materials_store.distinct(field=self.materials_store.key)
-        all_keys = all_keys[:100]
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask remote servers for those keys
@@ -283,15 +305,15 @@ class DoiBuilder(Builder):
 
         # now that i have all the data, I want to check these data against the ones I have in my local DOI collection
         # find all DOIs that are currently in the DOI collection
+        doi_records: List[DOIRecordModel] = []
+        for i in self.doi_store.query(criteria={self.doi_store.key: {"$in": all_keys}}):
+            doi_records.append(DOIRecordModel.parse_obj(i))
 
-        doi_records: List[DOIRecordModel] = \
-            [DOIRecordModel.parse_obj(i)
-             for i in self.doi_store.query(criteria={self.doi_store.key: {"$in": all_keys}})]
         to_update: List[DOIRecordModel] = []
         records_with_errors: List[DOIRecordModel] = []
 
         # iterate through doi records to classify them as being updated or deleted
-        self.logger.debug("Syncing your local DOI collection")
+        self.logger.debug("Syncing local DOI collection")
         for doi_record in tqdm(doi_records):
             osti_id = doi_record.get_osti_id()
             if osti_id not in elink_records_dict:
@@ -335,30 +357,25 @@ class DoiBuilder(Builder):
 
     def generate_elsevier_model(self, material: MaterialModel) -> ElsevierPOSTContainerModel:
         doi = self.get_doi(mp_id=material.task_id)
-        elsevier_model = ElsevierPOSTContainerModel(identifier=material.task_id,
-                                                    title=ElsevierPOSTContainerModel.get_title(material),
-                                                    doi=doi,
-                                                    url=ElsevierPOSTContainerModel.get_url(material.task_id),
-                                                    keywords=ElsevierPOSTContainerModel.get_keywords(material),
-                                                    date=datetime.now().date().__str__(),
-                                                    dateCreated=ElsevierPOSTContainerModel.get_date_created(material),
-                                                    dateAvailable=ElsevierPOSTContainerModel.get_date_available(
-                                                        material),
-                                                    description=self.get_material_description(material.task_id)
-                                                    )
-        return elsevier_model
+        description = self.get_material_description(material.task_id)
+        return ElsevierPOSTContainerModel.from_material_model(material=material, doi=doi, description=description)
 
-    def update_doi_record(self, doi_record, elink_record: ELinkGetResponseModel, bibtex_dict: dict):
+    def update_doi_record(self, doi_record: DOIRecordModel, elink_record: ELinkGetResponseModel, bibtex_dict: dict):
         """
-        Policies for updating a DOI record
+        Transitioning the state of a doi_record based on its status and bibtex values
+            - if status does not equal to remote server's status
+                - set to_update to True
+            - if bibtex does not equal
+                - set to_update to True
+                - set Valid to False
+
         :param doi_record: doi record to update
         :param elink_record: elink record to check against
-        :param bibtex_dict: dictionary of bibtex to fetch from.
+        :param bibtex_dict: dictionary of bibtex abstract note to fetch from.
         :return:
             None
         """
         to_update = False
-
         if doi_record.get_osti_id() != elink_record.osti_id:
             to_update = True
             # this condition should never be entered, but for the sake of extreme caution
@@ -366,22 +383,30 @@ class DoiBuilder(Builder):
                   f"Overwriting the one in DOI collection to match OSTI"
             self.logger.debug(msg)
             doi_record.doi = elink_record.osti_id
-        if doi_record.get_status() != elink_record.doi["@status"]:
-
+        if doi_record.status != DOIRecordStatusEnum[elink_record.doi["@status"]]:
             to_update = True
             self.logger.debug(f"status update for {doi_record.material_id} to {elink_record.doi['@status']}")
             doi_record.set_status(elink_record.doi["@status"])
+
         # update the bibtex if nessesary
         robo = self.robocrys_store.query_one(criteria={self.robocrys_store.key: doi_record.material_id})
-        robo_bibtex = RoboCrysModel.parse_obj(robo).description if robo is not None else None
-        explorer_bibtex = bibtex_dict.get(doi_record.get_osti_id(), None)
-        if robo_bibtex is not None and robo_bibtex != explorer_bibtex:
-            # this means that I have a new bibtex anx thus needs to update the remote server about the change
-            # setting doi_record.valid = False will notify the remote server
+        robo_description = RoboCrysModel.parse_obj(robo).description if robo is not None else None
+        explorer_entry = bibtex_dict.get(doi_record.get_osti_id(), None)
+        explorer_abstract_note = explorer_entry["abstractnote"] if explorer_entry is not None else None
+
+        # sync explorer with local doi record
+        if doi_record.get_bibtex_abstract() != explorer_abstract_note:
+            self.logger.debug(f"[{doi_record.material_id}]: Local DOI Bibtex is different from Explorer")
+            db = bibtexparser.bibdatabase.BibDatabase()
+            db.entries = [explorer_entry]
+            doi_record.bibtex = bibtexparser.dumps(db) if explorer_entry is not None else None
             to_update = True
-            doi_record.bibtex = robo_bibtex
+
+        # sync local doi record with robo and mark valid = False to send to server later
+        if robo_description is not None and doi_record.get_bibtex_abstract() != robo_description:
+            self.logger.debug(f"[{doi_record.material_id}]: Updates from Robo collection")
+            to_update = True
             doi_record.valid = False
-            self.logger.debug(f"Need to update bibtex for mp-id = [{doi_record.material_id}]")
 
         doi_record.last_validated_on = datetime.now()
         if to_update:
@@ -395,15 +420,16 @@ class DoiBuilder(Builder):
         :return:
             description in string
         """
+        description = RoboCrysModel.get_default_description()
         robo_result = self.robocrys_store.query_one(criteria={self.robocrys_store.key: mp_id})
         if robo_result is None:
-            return ELinkGetResponseModel.get_default_description()
+            return description
         else:
             robo_result = RoboCrysModel.parse_obj(robo_result)
-            description = robo_result.description
-            if description is None:
-                description = ELinkGetResponseModel.get_default_description()
-            return description[:12000]  # 12000 is the Elink Abstract character limit
+            robo_description = robo_result.description
+            if robo_description is None:
+                return description
+            return robo_description[:12000]  # 12000 is the Elink Abstract character limit
 
     def get_doi(self, mp_id) -> str:
         osti_id = self.get_osti_id(mp_id=mp_id)
@@ -433,7 +459,8 @@ class DoiBuilder(Builder):
             "materials_collection": self.materials_store.as_dict(),
             "robocrys_collection": self.robocrys_store.as_dict(),
             "dois_collection": self.doi_store.as_dict(),
-            "osti": self.osti.dict(),
+            "elink": self.elink.dict(),
+            "explorer": self.explorer.dict(),
             "elsevier": self.elsevier.dict(),
             "max_doi_requests": self.max_doi_requests,
             "sync": self.sync,
@@ -441,7 +468,6 @@ class DoiBuilder(Builder):
 
     @classmethod
     def from_dict(cls, d: dict):
-        assert "osti" in d, "Error: OSTI config not found"
         assert "elsevier" in d, "Error: elsevier config not found"
         assert "materials_collection" in d, "Error: materials_collection config not found"
         assert "dois_collection" in d, "Error: dois_collection config not found"
@@ -449,39 +475,22 @@ class DoiBuilder(Builder):
         assert "max_doi_requests" in d, "Error: max_doi_requests config not found"
         assert "sync" in d, "Error: sync config not found"
 
-        elink = ConnectionModel.parse_obj(d["osti"]["elink"])
-        explorer = ConnectionModel.parse_obj(d["osti"]["explorer"])
+        elink = ConnectionModel.parse_obj(d["elink"])
+        explorer = ConnectionModel.parse_obj(d["explorer"])
         elsevier = ConnectionModel.parse_obj(d["elsevier"])
-        osti = OSTIModel(elink=elink, explorer=explorer)
-        materials_store = cls._create_mongostore(config=d, config_collection_name="materials_collection")
-        robocrys_store = cls._create_mongostore(config=d, config_collection_name="robocrys_collection")
-        doi_store = cls._create_mongostore(config=d, config_collection_name="dois_collection")
+
+        materials_store = json.loads(json.dumps(d["materials_collection"]), cls=MontyDecoder)
+        robocrys_store = json.loads(json.dumps(d["robocrys_collection"]), cls=MontyDecoder)
+        doi_store = json.loads(json.dumps(d["dois_collection"]), cls=MontyDecoder)
 
         max_doi_requests = d["max_doi_requests"]
         sync = d["sync"]
         bld = DoiBuilder(materials_store=materials_store,
                          robocrys_store=robocrys_store,
                          doi_store=doi_store,
-                         osti=osti,
+                         elink=elink,
+                         explorer=explorer,
                          elsevier=elsevier,
                          max_doi_requests=max_doi_requests,
                          sync=sync)
         return bld
-
-    @classmethod
-    def _create_mongostore(cls, config: dict, config_collection_name: str) -> MongoStore:
-        """
-        Helper method to create a mongoStore instance
-        :param config: configuration dictionary
-        :param config_collection_name: collection name to build the mongo store
-        :return:
-            MongoStore instance based on the configuration parameters
-        """
-        mong_connection_model = MongoConnectionModel.parse_obj(config[config_collection_name])
-        return MongoStore(database=mong_connection_model.database,
-                          collection_name=mong_connection_model.collection_name,
-                          host=mong_connection_model.host,
-                          port=mong_connection_model.port,
-                          username=mong_connection_model.username,
-                          password=mong_connection_model.password,
-                          key=mong_connection_model.key)
