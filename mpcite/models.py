@@ -128,7 +128,7 @@ class DOIRecordModel(BaseModel):
     material_id: str = Field(...)
     doi: str = Field(default='')
     bibtex: Optional[str] = None
-    status: str  # Enum makes things hard here. I cannot unparse it
+    status: DOIRecordStatusEnum
     valid: bool = Field(False)
     last_updated: datetime = Field(default=datetime.now(),
                                    title="DOI last updated time.",
@@ -144,6 +144,9 @@ class DOIRecordModel(BaseModel):
                                           title="Date Elsevier is updated",
                                           description="If None, means never uploaded to elsevier")
     error: Optional[str] = Field(default=None, description="None if no error, else error message")
+
+    class Config:
+        use_enum_values = True
 
     def set_status(self, status):
         self.status = status

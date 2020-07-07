@@ -1,4 +1,3 @@
-
 from mpcite.models import ConnectionModel, ELinkPostResponseModel, ELinkGetResponseModel, DOIRecordModel, \
     ExplorerGetJSONResponseModel, ElinkResponseStatusEnum
 from abc import abstractmethod, ABCMeta
@@ -157,7 +156,6 @@ class ELinkAdapter(Adapter):
                     result: List[ELinkGetResponseModel] = [ELinkGetResponseModel.parse_obj(record) for record in
                                                            parse(elink_response_xml)["records"]["record"]]
             except Exception:
-                # self.logger.error(f"Cannot parse returned xml: \n{elink_response_xml}")
                 self.logger.error("Cannot parse returned xml")
             return result
         else:

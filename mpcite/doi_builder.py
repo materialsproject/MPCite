@@ -283,7 +283,7 @@ class DoiBuilder(Builder):
         self.logger.info("Start Syncing all materials. Note that this operation will take very long, "
                          "you may terminate it at anypoint, nothing bad will happen. "
                          "You may turn off sync by setting the sync flag to False")
-        all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        all_keys = self.doi_store.distinct(field=self.doi_store.key)
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
         # ask remote servers for those keys
@@ -399,6 +399,9 @@ class DoiBuilder(Builder):
             to_update = True
 
         # sync local doi record with robo and mark valid = False to send to server later
+        if robo_description is not None:  # hacky fix for robo mismatch
+            robo_description = robo_description.replace("  ", " ")
+
         if robo_description is not None and doi_record.get_bibtex_abstract() != robo_description:
             self.logger.debug(f"[{doi_record.material_id}]: Updates from Robo collection")
             to_update = True
