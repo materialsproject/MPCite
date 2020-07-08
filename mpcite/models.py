@@ -122,6 +122,7 @@ class DOIRecordStatusEnum(str, Enum):
     COMPLETED = "COMPLETED"
     PENDING = "PENDING"
     FAILURE = "FAILURE"
+    INIT = "INIT"
 
 
 class DOIRecordModel(BaseModel):

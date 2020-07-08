@@ -145,7 +145,7 @@ class DoiBuilder(Builder):
             if ID in new_materials_ids:
                 new_doi_record = DOIRecordModel(
                     material_id=ID,
-                    status="INIT",
+                    status=DOIRecordStatusEnum["INIT"],
                     valid=False)
                 yield new_doi_record
             else:
@@ -222,11 +222,12 @@ class DoiBuilder(Builder):
             for elink_post_response in tqdm(elink_post_responses):
                 record: DOIRecordModel = records_dict[elink_post_response.accession_num]
                 record.doi = elink_post_response.doi["#text"]
-                record.status = elink_post_response.doi["@status"]
+                record.status = DOIRecordStatusEnum[elink_post_response.doi["@status"]]
                 record.valid = True
                 record.last_validated_on = datetime.now()
                 record.last_updated = datetime.now()
-                record.error = "Unkonwn error happend when pushing to ELINK. " if record.status == "Failure" else None
+                record.error = "Unkonwn error happend when pushing to ELINK. " \
+                    if record.status == DOIRecordStatusEnum.FAILURE else None
 
             # now post to elsevier
             self.logger.info("POSTing to elsevier")
