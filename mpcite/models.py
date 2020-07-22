@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum
 import bibtexparser
 
+
 class ConnectionModel(BaseModel):
     endpoint: str = Field(..., title="URL Endpoint of the connection")
     username: str = Field(..., title="User Name")
@@ -165,6 +166,7 @@ class DOIRecordModel(BaseModel):
                 return bib_db.entries[0]["abstractnote"]
         except:
             return None
+
 
 class ElsevierPOSTContainerModel(BaseModel):
     identifier: str = Field(default="", title="mp_id")

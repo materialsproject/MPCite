@@ -222,7 +222,7 @@ class DoiBuilder(Builder):
             for elink_post_response in tqdm(elink_post_responses):
                 record: DOIRecordModel = records_dict[elink_post_response.accession_num]
                 record.doi = elink_post_response.doi["#text"]
-                record.status = DOIRecordStatusEnum[elink_post_response.doi["@status"]]
+                record.status = DOIRecordStatusEnum[elink_post_response.doi["@status"]].value
                 record.valid = True
                 record.last_validated_on = datetime.now()
                 record.last_updated = datetime.now()
@@ -284,6 +284,7 @@ class DoiBuilder(Builder):
         self.logger.info("Start Syncing all materials. Note that this operation will take very long, "
                          "you may terminate it at anypoint, nothing bad will happen. "
                          "You may turn off sync by setting the sync flag to False")
+
         all_keys = self.doi_store.distinct(field=self.doi_store.key)
         self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
 
