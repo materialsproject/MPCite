@@ -1,4 +1,5 @@
 import argparse
+
 # from mpcite.doi_builder import DoiBuilder
 from mpcite.doi_builder import DoiBuilder
 from pathlib import Path
@@ -20,8 +21,10 @@ def str2bool(v):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Parse Arguments for DOI Builder')
-    parser.add_argument('-f', "--config_file_path", help="File path for the .json config file")
+    parser = argparse.ArgumentParser(description="Parse Arguments for DOI Builder")
+    parser.add_argument(
+        "-f", "--config_file_path", help="File path for the .json config file"
+    )
     parser.add_argument("-debug", "--debug", type=str2bool, help="Debug option (T/F)")
     args = parser.parse_args()
     assert args.config_file_path is not None, "Please provide a configuration file path"
@@ -36,5 +39,5 @@ def main():
     print(f"Program run took {toc - tic:0.4f} seconds")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -3,13 +3,14 @@ mpcite.egg-info/*
 *.pyc
 *.yaml
 *.log
-!files/config.json
+!files/config_test.json
+!files/config_prod.json
 !files
 .idea
 dist
 build
 mpcite.egg-info
 .DS_store
-files/config.json
+files/config_test.json
 .pytest_cache
 .ipynb_checkpoints

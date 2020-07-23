@@ -18,74 +18,91 @@ class RoboCrysModel(BaseModel):
 
     @classmethod
     def get_default_description(cls):
-        return 'Computed materials data using density ' \
-               'functional theory calculations. These calculations determine ' \
-               'the electronic structure of bulk materials by solving ' \
-               'approximations to the Schrodinger equation. For more ' \
-               'information, see https://materialsproject.org/docs/calculations'
+        return (
+            "Computed materials data using density "
+            "functional theory calculations. These calculations determine "
+            "the electronic structure of bulk materials by solving "
+            "approximations to the Schrodinger equation. For more "
+            "information, see https://materialsproject.org/docs/calculations"
+        )
 
 
 class MaterialModel(BaseModel):
-    last_updated: datetime = Field(None, title="timestamp for the most recent calculation")
-    created_at: datetime = Field(None,
-                                 description="creation time for this material defined by when the first structure "
-                                             "optimization calculation was run")
-    task_id: str = Field('', title="task id for this material. Also called the material id")
+    last_updated: datetime = Field(
+        None, title="timestamp for the most recent calculation"
+    )
+    created_at: datetime = Field(
+        None,
+        description="creation time for this material defined by when the first structure "
+        "optimization calculation was run",
+    )
+    task_id: str = Field(
+        "", title="task id for this material. Also called the material id"
+    )
     formula_pretty: str = Field(..., title="clean representation of the formula")
     chemsys: str
 
 
 class ELinkGetResponseModel(BaseModel):
     osti_id: Optional[str] = Field(...)
-    dataset_type: str = Field(default='SM')
+    dataset_type: str = Field(default="SM")
     title: str = Field(...)
-    creators: str = Field(default='Kristin Persson')
+    creators: str = Field(default="Kristin Persson")
     product_nos: str = Field(..., title="MP id")
     accession_num: str = Field(..., title="MP id")
-    contract_nos: str = Field('AC02-05CH11231; EDCBEE')
+    contract_nos: str = Field("AC02-05CH11231; EDCBEE")
     originating_research_org: str = Field(
-        default='Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)')
+        default="Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)"
+    )
     publication_date: str = Field(...)
-    language: str = Field(default='English')
-    country: str = Field(default='US')
-    sponsor_org: str = Field(default='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)')
+    language: str = Field(default="English")
+    country: str = Field(default="US")
+    sponsor_org: str = Field(
+        default="USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)"
+    )
     site_url: str = Field(...)
-    contact_name: str = Field(default='Kristin Persson')
+    contact_name: str = Field(default="Kristin Persson")
     contact_org: str = Field(default="LBNL")
-    contact_email: str = Field(default='kapersson@lbl.gov')
-    contact_phone: str = Field(default='+1(510)486-7218')
-    related_resource: str = Field('https://materialsproject.org/citing')
-    contributor_organizations: str = Field(default='MIT; UC Berkeley; Duke; U Louvain')
-    subject_categories_code: str = Field(default='36 MATERIALS SCIENCE')
+    contact_email: str = Field(default="kapersson@lbl.gov")
+    contact_phone: str = Field(default="+1(510)486-7218")
+    related_resource: str = Field("https://materialsproject.org/citing")
+    contributor_organizations: str = Field(default="MIT; UC Berkeley; Duke; U Louvain")
+    subject_categories_code: str = Field(default="36 MATERIALS SCIENCE")
     keywords: str = Field(...)
     description: str = Field(default="")
-    doi: dict = Field({}, title="DOI info", description="Mainly used during GET request")
+    doi: dict = Field(
+        {}, title="DOI info", description="Mainly used during GET request"
+    )
 
     @classmethod
     def get_title(cls, material: MaterialModel):
         formula = material.formula_pretty
-        return 'Materials Data on %s by Materials Project' % formula
+        return "Materials Data on %s by Materials Project" % formula
 
     @classmethod
     def get_site_url(cls, mp_id):
-        return 'https://materialsproject.org/materials/%s' % mp_id
+        return "https://materialsproject.org/materials/%s" % mp_id
 
     @classmethod
     def get_keywords(cls, material):
-        keywords = '; '.join(['crystal structure', material.formula_pretty, material.chemsys])
+        keywords = "; ".join(
+            ["crystal structure", material.formula_pretty, material.chemsys]
+        )
         return keywords
 
     @classmethod
     def get_default_description(cls):
-        return 'Computed materials data using density ' \
-               'functional theory calculations. These calculations determine ' \
-               'the electronic structure of bulk materials by solving ' \
-               'approximations to the Schrodinger equation. For more ' \
-               'information, see https://materialsproject.org/docs/calculations'
+        return (
+            "Computed materials data using density "
+            "functional theory calculations. These calculations determine "
+            "the electronic structure of bulk materials by solving "
+            "approximations to the Schrodinger equation. For more "
+            "information, see https://materialsproject.org/docs/calculations"
+        )
 
     @classmethod
     def custom_to_dict(cls, elink_record) -> dict:
-        if elink_record.osti_id is None or elink_record.osti_id == '':
+        if elink_record.osti_id is None or elink_record.osti_id == "":
             return elink_record.dict(exclude={"osti_id", "doi"})
         else:
             return elink_record.dict(exclude={"doi"})
@@ -108,12 +125,14 @@ class ELinkPostResponseModel(BaseModel):
     status_message: Optional[str]
 
     def generate_doi_record(self):
-        doi_collection_record = DOIRecordModel(material_id=self.accession_num,
-                                               doi=self.doi["#text"],
-                                               status=self.doi["@status"],
-                                               bibtex=None,
-                                               valid=True,
-                                               last_validated_on=datetime.now())
+        doi_collection_record = DOIRecordModel(
+            material_id=self.accession_num,
+            doi=self.doi["#text"],
+            status=self.doi["@status"],
+            bibtex=None,
+            valid=True,
+            last_validated_on=datetime.now(),
+        )
         doi_collection_record.set_status(status=self.doi["@status"])
         doi_collection_record.last_validated_on = datetime.now()
         return doi_collection_record
@@ -128,24 +147,33 @@ class DOIRecordStatusEnum(str, Enum):
 
 class DOIRecordModel(BaseModel):
     material_id: str = Field(...)
-    doi: str = Field(default='')
+    doi: str = Field(default="")
     bibtex: Optional[str] = None
     status: DOIRecordStatusEnum
     valid: bool = Field(False)
-    last_updated: datetime = Field(default=datetime.now(),
-                                   title="DOI last updated time.",
-                                   description="Last updated is defined as either a Bibtex or status change.")
-    created_at: datetime = Field(default=datetime.now(),
-                                 title="DOI Created At",
-                                 description="creation time for this DOI record")
-    last_validated_on: datetime = Field(default=datetime.now(),
-                                        title="Date Last Validated",
-                                        description="Date that this data is last validated, "
-                                                    "not necessarily updated")
-    elsevier_updated_on: datetime = Field(default=datetime.now(),
-                                          title="Date Elsevier is updated",
-                                          description="If None, means never uploaded to elsevier")
-    error: Optional[str] = Field(default=None, description="None if no error, else error message")
+    last_updated: datetime = Field(
+        default=datetime.now(),
+        title="DOI last updated time.",
+        description="Last updated is defined as either a Bibtex or status change.",
+    )
+    created_at: datetime = Field(
+        default=datetime.now(),
+        title="DOI Created At",
+        description="creation time for this DOI record",
+    )
+    last_validated_on: datetime = Field(
+        default=datetime.now(),
+        title="Date Last Validated",
+        description="Date that this data is last validated, " "not necessarily updated",
+    )
+    elsevier_updated_on: datetime = Field(
+        default=datetime.now(),
+        title="Date Elsevier is updated",
+        description="If None, means never uploaded to elsevier",
+    )
+    error: Optional[str] = Field(
+        default=None, description="None if no error, else error message"
+    )
 
     class Config:
         use_enum_values = True
@@ -154,18 +182,32 @@ class DOIRecordModel(BaseModel):
         self.status = status
 
     def get_osti_id(self):
-        if self.doi is None or self.doi == '':
-            return ''
+        if self.doi is None or self.doi == "":
+            return ""
         else:
-            return self.doi.split('/')[-1]
+            return self.doi.split("/")[-1]
 
     def get_bibtex_abstract(self):
         try:
-            bib_db: bibtexparser.bibdatabase.BibDatabase = bibtexparser.loads(self.bibtex)
+            bib_db: bibtexparser.bibdatabase.BibDatabase = bibtexparser.loads(
+                self.bibtex
+            )
             if bib_db.entries:
                 return bib_db.entries[0]["abstractnote"]
-        except:
+        except Exception:
             return None
+
+
+class OSTIDOIRecordModel(DOIRecordModel):
+    material_id: str = Field(...)
+    doi: str = Field(default="")
+    bibtex: Optional[str] = None
+    valid: bool = Field(False)
+    last_updated: datetime = Field(
+        default=datetime.now(),
+        title="DOI last updated time.",
+        description="Last updated is defined as either a Bibtex or status change.",
+    )
 
 
 class ElsevierPOSTContainerModel(BaseModel):
@@ -175,17 +217,17 @@ class ElsevierPOSTContainerModel(BaseModel):
     title: str
     description: str = ""
     doi: str
-    authors: List[str] = ['Kristin Persson']
+    authors: List[str] = ["Kristin Persson"]
     url: str
     type: str = "dataset"
     dateAvailable: str = datetime.now().date().isoformat().__str__()
     dateCreated: str = datetime.now().date().isoformat().__str__()
     version: str = "1.0.0"
-    funding: str = 'USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)'
+    funding: str = "USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)"
     language: str = "en"
     method: str = "Materials Project"
     accessRights: str = "Public"
-    contact: str = 'Kristin Persson <kapersson@lbl.gov>'
+    contact: str = "Kristin Persson <kapersson@lbl.gov>"
     dataStandard: str = "https://materialsproject.org/citing"
     howToCite: str = "https://materialsproject.org/citing"
     subjectAreas: List[str] = ["36 MATERIALS SCIENCE"]
@@ -201,19 +243,21 @@ class ElsevierPOSTContainerModel(BaseModel):
 
     @classmethod
     def get_url(cls, mp_id):
-        return 'https://materialsproject.org/materials/%s' % mp_id
+        return "https://materialsproject.org/materials/%s" % mp_id
 
     @classmethod
     def get_keywords(cls, material: MaterialModel):
-        return ['crystal structure', material.formula_pretty, material.chemsys]
+        return ["crystal structure", material.formula_pretty, material.chemsys]
 
     @classmethod
     def get_default_description(cls):
-        return 'Computed materials data using density ' \
-               'functional theory calculations. These calculations determine ' \
-               'the electronic structure of bulk materials by solving ' \
-               'approximations to the Schrodinger equation. For more ' \
-               'information, see https://materialsproject.org/docs/calculations'
+        return (
+            "Computed materials data using density "
+            "functional theory calculations. These calculations determine "
+            "the electronic structure of bulk materials by solving "
+            "approximations to the Schrodinger equation. For more "
+            "information, see https://materialsproject.org/docs/calculations"
+        )
 
     @classmethod
     def get_date_created(cls, material: MaterialModel) -> str:
@@ -229,17 +273,17 @@ class ElsevierPOSTContainerModel(BaseModel):
 
     @classmethod
     def from_material_model(cls, material: MaterialModel, doi: str, description: str):
-        model = ElsevierPOSTContainerModel(identifier=material.task_id,
-                                           title=material.formula_pretty,
-                                           doi=doi,
-                                           url='https://materialsproject.org/materials/%s' % material.task_id,
-                                           keywords=['crystal structure', material.formula_pretty, material.chemsys],
-                                           date=datetime.now().date().__str__(),
-                                           dateCreated=material.created_at.date().__str__(),
-                                           dateAvailable=ElsevierPOSTContainerModel.get_date_available(
-                                               material),
-                                           description=description
-                                           )
+        model = ElsevierPOSTContainerModel(
+            identifier=material.task_id,
+            title=material.formula_pretty,
+            doi=doi,
+            url="https://materialsproject.org/materials/%s" % material.task_id,
+            keywords=["crystal structure", material.formula_pretty, material.chemsys],
+            date=datetime.now().date().__str__(),
+            dateCreated=material.created_at.date().__str__(),
+            dateAvailable=ElsevierPOSTContainerModel.get_date_available(material),
+            description=description,
+        )
         return model
 
 
