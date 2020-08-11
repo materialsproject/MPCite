@@ -97,6 +97,24 @@ class ELinkAdapter(Adapter):
                         to_return.append(e)
             return to_return
 
+    def post_collection(self, data: bytes) -> requests.Response:
+        """
+        Post xml. The xml is assumed to be in the format that ELINK wants. Note that this xml may contain
+        multiple records, and therefore ELink may response with multiple objects
+
+        Args:
+            data: data to post
+
+        Returns:
+            Elink Response.
+        """
+        r = requests.post(
+            self.config.endpoint,
+            auth=(self.config.username, self.config.password),
+            data=data,
+        )
+        return r
+
     def parse_obj_to_elink_post_response_model(
         self, obj
     ) -> Union[None, ELinkPostResponseModel]:
