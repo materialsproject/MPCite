@@ -20,4 +20,6 @@ setup(
     keywords=["materials", "citation", "framework", "digital object identifiers"],
     # scripts=glob.glob(os.path.join(SETUP_PTH, "scripts", "*")),
     entry_points={"console_scripts": ["mpcite=mpcite.main:main"]},
+    include_package_data=True,
+    package_data={"": ["Visualizations.ipynb"]},
 )

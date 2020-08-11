@@ -17,6 +17,8 @@ from xml.dom.minidom import parseString
 import json
 from tqdm import tqdm
 import bibtexparser
+import time
+from typing import Any
 
 
 class Adapter(metaclass=ABCMeta):
@@ -180,6 +182,7 @@ class ELinkAdapter(Adapter):
             for i in tqdm(range(0, len(mp_ids), chunk_size)):
                 chunk = self.get_multiple_helper(mp_ids=mp_ids[i : i + chunk_size])
                 result.extend(chunk)
+                time.sleep(1)
             return result
         else:
             return self.get_multiple_helper(mp_ids=mp_ids)
@@ -212,13 +215,17 @@ class ELinkAdapter(Adapter):
                             parse(elink_response_xml)["records"]["record"]
                         )
                     )
+                elif num_found == "0":
+                    return []
                 else:
                     result: List[ELinkGetResponseModel] = [
                         ELinkGetResponseModel.parse_obj(record)
                         for record in parse(elink_response_xml)["records"]["record"]
                     ]
-            except Exception:
-                self.logger.error("Cannot parse returned xml")
+            except Exception as e:
+                self.logger.error(
+                    f"Cannot parse returned xml. Error: {e} \n{elink_response_xml}"
+                )
             return result
         else:
             msg = f"Error code from GET is {r.status_code}: {r.content}"
@@ -340,7 +347,7 @@ class ExplorerAdapter(Adapter):
         else:
             raise HTTPError(f"Query for OSTI ID = {osti_id} failed")
 
-    def get_multiple_bibtex(self, osti_ids: List[str], chunk_size=10) -> Dict[str, str]:
+    def get_multiple_bibtex(self, osti_ids: List[str], chunk_size=10) -> Dict[str, Any]:
         """
         Get multiple bibtex
         Args:
@@ -364,6 +371,7 @@ class ExplorerAdapter(Adapter):
                     result.update(
                         self.get_multiple_bibtex_helper(osti_ids[i : i + chunk_size])
                     )
+                    time.sleep(1)
                 except HTTPError:
                     self.logger.error(
                         f"Failed to update osti_ids [{osti_ids[i: i + chunk_size]}], skipping"
@@ -379,10 +387,10 @@ class ExplorerAdapter(Adapter):
         Returns:
             return OSTI -> bibtex
         """
-        payload = {"osti_id": [" OR ".join(osti_ids)], "rows": len(osti_ids)}
+        payload = {"rows": len(osti_ids)}
         header = {"Accept": "application/x-bibtex"}
         r = requests.get(
-            url=self.config.endpoint,
+            url=self.config.endpoint + "?osti_id=" + "%20OR%20".join(osti_ids),
             auth=(self.config.username, self.config.password),
             params=payload,
             headers=header,
@@ -391,6 +399,7 @@ class ExplorerAdapter(Adapter):
             if r.content.decode() == "":
                 return dict()
             result = self.parse_bibtex(r.content.decode())
+
             return result
         else:
             raise HTTPError(f"Query for OSTI IDs = {osti_ids} failed")

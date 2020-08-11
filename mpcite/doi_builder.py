@@ -17,6 +17,15 @@ from maggma.stores import Store
 from monty.json import MontyDecoder
 import json
 import bibtexparser
+import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
+from nbconvert import PDFExporter
+from pathlib import Path
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 
 
 class DoiBuilder(Builder):
@@ -32,9 +41,9 @@ class DoiBuilder(Builder):
         doi_store: Store,
         elink: ConnectionModel,
         explorer: ConnectionModel,
-        # elsevier: ConnectionModel,
         max_doi_requests=1000,
         sync=True,
+        report_emails=None,
         **kwargs,
     ):
         """
@@ -55,6 +64,8 @@ class DoiBuilder(Builder):
             sources=[materials_store, robocrys_store], targets=[doi_store], **kwargs
         )
         # set connections
+        if report_emails is None:
+            report_emails = ["wuxiaohua1011@berkeley.edu", "phuck@lbl.gov"]
         self.materials_store = materials_store
         self.robocrys_store = robocrys_store
         self.doi_store = doi_store
@@ -68,6 +79,15 @@ class DoiBuilder(Builder):
         # set flags
         self.max_doi_requests = max_doi_requests
         self.sync = sync
+
+        self.report_emails = (
+            ["wuxiaohua1011@berkeley.edu", "phuck@lbl.gov"]
+            if report_emails is None
+            else report_emails
+        )
+        self.email_messages = []
+        self.has_error = False
+        self.config_file_path = None
 
         # set logging
         self.logger.debug("DOI Builder Succesfully instantiated")
@@ -124,7 +144,7 @@ class DoiBuilder(Builder):
             f"Found [{len(update_ids)}] materials that are invalid, need to be updated"
         )
 
-        overall_ids = []
+        overall_ids = update_ids
         new_materials_ids: Set[str] = set()
         if len(overall_ids) < self.max_doi_requests:
             failed_ids = set(
@@ -165,6 +185,8 @@ class DoiBuilder(Builder):
             dict: a submitted DOI
         """
         try:
+            if item is None:
+                return {}
             material = self.materials_store.query_one(
                 criteria={self.materials_store.key: item.material_id}
             )
@@ -205,6 +227,8 @@ class DoiBuilder(Builder):
         Returns:
 
         """
+        if len(items) == 0:
+            return
         self.logger.info(f"Start Updating/registering {len(items)} items")
         elink_post_data: List[dict] = []
         # elsevier_post_data: List[dict] = []
@@ -213,6 +237,8 @@ class DoiBuilder(Builder):
         # group them
         self.logger.debug("Grouping Received Items")
         for item in tqdm(items):
+            if len(item) == 0:
+                continue
             doi_record: DOIRecordModel = item["doi_record"]
             records_dict[doi_record.material_id] = doi_record
             if item.get("elink_post_record", None) is not None:
@@ -221,9 +247,6 @@ class DoiBuilder(Builder):
                         elink_record=item["elink_post_record"]
                     )
                 )
-            # if item.get("elsevier_post_record", None) is not None:
-            #     elsevier_post_data.append(item["elsevier_post_record"].dict())
-
         # post it
         try:
 
@@ -252,35 +275,27 @@ class DoiBuilder(Builder):
                     else None
                 )
 
-            # now post to elsevier
-            # self.logger.info("POSTing to elsevier")
-            # for elsevier in tqdm(elsevier_post_data):
-            #     mp_id = elsevier["identifier"]
-            #     if mp_id in records_dict and records_dict[mp_id].valid:
-            #         elsevier["doi"] = records_dict[mp_id].doi
-            #         try:
-            #             self.elsevier_adapter.post(data=elsevier)
-            #             records_dict[mp_id].elsevier_updated_on = datetime.now()
-            #         except Exception as e:
-            #             self.logger.error(
-            #                 msg="Unable to post because {}".format(e.__str__())
-            #             )
             self.logger.info("Updating local DOI collection")
             self.doi_store.update(
                 docs=[r.dict() for r in records_dict.values()], key=self.doi_store.key
             )
-            self.logger.info(
+            self.logger.debug(
+                f"Updated records with mp_ids: {[r.material_id for r in records_dict.values()]} "
+            )
+            message = (
                 f"Attempted to update / register [{len(records_dict)}] record(s) "
                 f"- [{len(records_dict) - len(elink_post_responses)}] Failed"
             )
+            self.email_messages.append(message)
+            self.logger.info(message)
 
-        except HTTPError as e:
-            self.logger.error(f"Failed to POST, no updates done. Error: {e}")
         except Exception as e:
+            self.has_error = True
             self.logger.error(f"Failed to POST. No updates done. Error: \n{e}")
 
     def finalize(self):
         self.logger.info(f"DOI store now has {self.doi_store.count()} records")
+        self.send_email()
         super(DoiBuilder, self).finalize()
 
     """
@@ -289,25 +304,11 @@ class DoiBuilder(Builder):
 
     def sync_doi_collection(self):
         """
-        Goal: Synchronize DOI Collection against remote servers
+        First download data and sync local doi collection
+        Then cross check whether local doi collection is up-to-date by cross checking with robocrys
 
-        Procedure:
-            1. pull data from Elink and Explorer
-            2. compare data against local DOI collection
-                - if there is a mismatch
-                    - if there is a mimatch in Status
-                        - update local DOI record's status
-                    - if there is a mismatch in Bibtex
-                        - set VALID = False, implicitly moving its state to False for later updates
-                - update the local DOI collection
-            3. return a list of mp_ids that have their VALID=False set.
-
-        Sync DOI collection, set the status, and bibtext field,
-        double check whether the DOI field matches
-
-        NOTE, this function might take a while to execute
-        :return:
-            a list of mp_ids that have its state set to VALID=False
+        Returns:
+            None
         """
         # find distinct mp_ids that needs to be checked against remote servers
         self.logger.info(
@@ -315,65 +316,187 @@ class DoiBuilder(Builder):
             "you may terminate it at anypoint, nothing bad will happen. "
             "You may turn off sync by setting the sync flag to False"
         )
+        # First I want to download all the data
+        all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        self.logger.info(f"Downloading [{len(all_keys)}] DOIs")
+        elink_records, bibtex_dict = self.download_data(all_keys)
+        elink_records_dict = ELinkAdapter.list_to_dict(
+            elink_records
+        )  # osti_id -> elink_record
 
-        all_keys = self.doi_store.distinct(field=self.doi_store.key)
-        self.logger.info(f"Syncing [{len(all_keys)}] DOIs")
+        # now i want to update my local doi collection
+        try:
+            self.sync_doi_collection_from_downloads(
+                elink_records=elink_records, bibtex_dict=bibtex_dict
+            )
+        except Exception as e:
+            self.has_error = True
+            self.logger.error(f"Updating Local DOI failed. Error: {e}")
 
-        # ask remote servers for those keys
-        # ask elink if it has those DOI records. create a mapping of mp_id -> elink_Record
-        elink_records = self.elink_adapter.get_multiple(mp_ids=all_keys, chunk_size=100)
-        # osti_id -> elink_record
-        elink_records_dict = ELinkAdapter.list_to_dict(elink_records)
+        # now i want to cross check against my other databases to see if doi collection is up-to-date
+        # first get a list of keys in doi store
+        all_keys = self.doi_store.distinct(
+            criteria={self.doi_store.key: {"$in": all_keys}}, field=self.doi_store.key
+        )
+        # then get those keys from robo
+        robos: List[RoboCrysModel] = [
+            RoboCrysModel.parse_obj(robo)
+            for robo in self.robocrys_store.query(
+                criteria={self.robocrys_store.key: {"$in": all_keys}}
+            )
+        ]
+        robos_dict: Dict[str, str] = {
+            robo.material_id: robo.description for robo in robos
+        }  # robo.material_id -> robo.description
 
-        # osti_id -> bibtex
+        # then do a check if robo description == doi record description
+        doi_records: List[DOIRecordModel] = [
+            DOIRecordModel.parse_obj(doi_record)
+            for doi_record in self.doi_store.query(
+                criteria={self.doi_store.key: {"$in": all_keys}}
+            )
+        ]
+
+        self.update_doi_collection(
+            doi_records=doi_records,
+            robos_dict=robos_dict,
+            elink_records_dict=elink_records_dict,
+        )
+        self.logger.info("Sync Finished")
+
+    def update_doi_collection(
+        self,
+        doi_records: List[DOIRecordModel],
+        robos_dict: Dict[str, str],
+        elink_records_dict: Dict[str, ELinkGetResponseModel],
+    ) -> None:
+        """
+        Function that takes a list of doi records, its corresponding robos info, and the elink info,
+        and make a decision of whether to mark a record as valid
+        Args:
+            doi_records: list of doi records to check
+            robos_dict: a dictionary of corresponding new descriptions
+            elink_records_dict: elink results
+
+        Returns:
+            None
+        """
+        self.logger.info("Updating DOI Collection")
+        update_doi_record_count = 0
+        for doi_record in tqdm(doi_records):
+            doi_record.last_validated_on = datetime.now()
+            doi_record_abstract = doi_record.get_bibtex_abstract()
+            robo_description = robos_dict.get(doi_record.material_id, None)
+
+            if robo_description is not None:
+                robo_description = robo_description.replace("  ", " ")
+
+            if (
+                doi_record.status
+                != DOIRecordStatusEnum[
+                    elink_records_dict[doi_record.get_osti_id()].doi["@status"]
+                ]
+            ):
+                doi_record.status = DOIRecordStatusEnum[
+                    elink_records_dict[doi_record.get_osti_id()].doi["@status"]
+                ]
+                doi_record.last_updated = datetime.now()
+                update_doi_record_count += 1
+
+            if doi_record_abstract != robo_description:
+                # mark this entry as needed to be updated
+                self.logger.debug(
+                    f"[{doi_record.material_id}]'s abstract needs to be updated"
+                )
+                doi_record.valid = False
+                # doi_record.last_updated = datetime.now()
+                # update_doi_record_count += 1
+            elif (
+                doi_record.valid is False
+                and doi_record.status == DOIRecordStatusEnum.COMPLETED
+            ):
+                doi_record.valid = (
+                    True
+                )  # if the bibtex is updated, flip the valid flag back to true
+
+        self.doi_store.update(
+            docs=[doi_record.dict() for doi_record in doi_records],
+            key=self.doi_store.key,
+        )
+
+        message = f"Validated [{len(doi_records)}] DOI Records"
+        self.email_messages.append(message)
+        self.logger.info(message)
+
+    def download_data(self, keys: List[str]):
+        elink_records = self.elink_adapter.get_multiple(mp_ids=keys, chunk_size=100)
         try:
             bibtex_dict = self.explorer_adapter.get_multiple_bibtex(
                 osti_ids=[r.osti_id for r in elink_records], chunk_size=100
             )
         except HTTPError:
             bibtex_dict = dict()
+        return elink_records, bibtex_dict
 
-        # now that i have all the data, I want to check these data against the ones I have in my local DOI collection
-        # find all DOIs that are currently in the DOI collection
-        doi_records: List[DOIRecordModel] = []
-        for i in self.doi_store.query(criteria={self.doi_store.key: {"$in": all_keys}}):
-            doi_records.append(DOIRecordModel.parse_obj(i))
+    def sync_doi_collection_from_downloads(
+        self, elink_records: List[ELinkGetResponseModel], bibtex_dict: Dict[str, dict]
+    ) -> None:
+        """
+        Construct DOI records and sync with local collection
 
-        to_update: List[DOIRecordModel] = []
-        records_with_errors: List[DOIRecordModel] = []
+        Args:
+            elink_records: elink records
+            bibtex_dict: bibtex records
 
-        # iterate through doi records to classify them as being updated or deleted
-        self.logger.info("Syncing local DOI collection")
-        for doi_record in tqdm(doi_records):
-            osti_id = doi_record.get_osti_id()
-            if osti_id not in elink_records_dict:
-                # if i found a record that is in my local DOI collection, but not in remote server
-                # something VERY bad happened, not sure why did this record get published onto remote server
-                # delete this record from local DOI collection to maintain cleanliness, but write this record out
-                doi_record.error = (
-                    f"Found in Local DOI Collection, but not found in ELink. "
-                    f"Material ID = {doi_record.material_id} | DOI = {doi_record.doi}"
-                )
-                records_with_errors.append(doi_record)
-                self.logger.error(
-                    f"Found [{doi_record.material_id}] in Local DOI Collection, but not found in ELink"
-                )
-            else:
-                self.update_doi_record(
-                    doi_record=doi_record,
-                    elink_record=elink_records_dict.get(osti_id, None),
-                    bibtex_dict=bibtex_dict,
-                )
-                to_update.append(doi_record)
+        Returns:
+            None
+        """
+        self.logger.info("Syncing DOI Collection from Downloads")
+        curr_records: Dict[str, DOIRecordModel] = {
+            DOIRecordModel.parse_obj(record).material_id: DOIRecordModel.parse_obj(
+                record
+            )
+            for record in self.doi_store.query(
+                criteria={
+                    self.doi_store.key: {
+                        "$in": [
+                            elink_record.accession_num for elink_record in elink_records
+                        ]
+                    }
+                }
+            )
+        }
+        doi_records_from_download: List[DOIRecordModel] = []
+        for elink_record in tqdm(elink_records):
+            doi_record: DOIRecordModel = DOIRecordModel(
+                material_id=elink_record.accession_num,
+                doi=elink_record.doi["#text"],
+                bibtex=None,
+                status=elink_record.doi["@status"],
+                valid=False,
+                last_validated_on=datetime.now(),
+                created_at=datetime.now()
+                if elink_record.accession_num not in curr_records
+                else curr_records[elink_record.accession_num].created_at,
+                last_updated=datetime.now()
+                if elink_record.accession_num not in curr_records
+                else curr_records[elink_record.accession_num].last_updated,
+            )
+            bibtex_entry: dict = bibtex_dict.get(doi_record.get_osti_id(), None)
+            doi_record.bibtex = (
+                self.create_bibtex_string(bibtex_entry)
+                if bibtex_entry is not None
+                else None
+            )
+            doi_records_from_download.append(doi_record)
 
-        # send database query for actual updates
         self.doi_store.update(
-            docs=[r.dict() for r in to_update], key=self.doi_store.key
+            docs=[record.dict() for record in doi_records_from_download],
+            key=self.doi_store.key,
         )
-        self.doi_store.update(
-            docs=[r.dict() for r in records_with_errors], key=self.doi_store.key
-        )
-        self.logger.info(f"Updated [{len(to_update)}] records")
+        message = f"Downloaded [{len(doi_records_from_download)}] records from Elink"
+        self.email_messages.append(message)
+        self.logger.info(message)
 
     def generate_elink_model(self, material: MaterialModel) -> ELinkGetResponseModel:
         """
@@ -396,92 +519,10 @@ class DoiBuilder(Builder):
         )
         return elink_record
 
-    def update_doi_record(
-        self,
-        doi_record: DOIRecordModel,
-        elink_record: ELinkGetResponseModel,
-        bibtex_dict: dict,
-    ):
-        """
-        Transitioning the state of a doi_record based on its status and bibtex values
-            - if status does not equal to remote server's status
-                - set to_update to True
-            - if bibtex does not equal
-                - set to_update to True
-                - set Valid to False
-
-        :param doi_record: doi record to update
-        :param elink_record: elink record to check against
-        :param bibtex_dict: dictionary of bibtex abstract note to fetch from.
-        :return:
-            None
-        """
-        to_update = False
-        if doi_record.get_osti_id() != elink_record.osti_id:
-            to_update = True
-            # this condition should never be entered, but for the sake of extreme caution
-            msg = (
-                f"DOI record mismatch for mp_id = {doi_record.material_id}. "
-                f"Overwriting the one in DOI collection to match OSTI"
-            )
-            self.logger.debug(msg)
-            doi_record.doi = elink_record.osti_id
-        if doi_record.status != DOIRecordStatusEnum[elink_record.doi["@status"]]:
-            to_update = True
-            self.logger.debug(
-                f"status update for {doi_record.material_id} to {elink_record.doi['@status']}"
-            )
-            doi_record.set_status(elink_record.doi["@status"])
-
-        # update the bibtex if nessesary
-        robo = self.robocrys_store.query_one(
-            criteria={self.robocrys_store.key: doi_record.material_id}
-        )
-        robo_description = (
-            RoboCrysModel.parse_obj(robo).description if robo is not None else None
-        )
-        explorer_entry = bibtex_dict.get(doi_record.get_osti_id(), None)
-        explorer_abstract_note = (
-            explorer_entry["abstractnote"] if explorer_entry is not None else None
-        )
-
-        # sync explorer with local doi record
-        if doi_record.get_bibtex_abstract() != explorer_abstract_note:
-            self.logger.debug(
-                f"[{doi_record.material_id}]: Local DOI Bibtex is different from Explorer"
-            )
-            db = bibtexparser.bibdatabase.BibDatabase()
-            db.entries = [explorer_entry]
-            doi_record.bibtex = (
-                bibtexparser.dumps(db) if explorer_entry is not None else None
-            )
-            to_update = True
-
-        # sync local doi record with robo and mark valid = False to send to server later
-        if robo_description is not None:  # hacky fix for robo mismatch
-            robo_description = robo_description.replace("  ", " ")
-
-        if (
-            robo_description is not None
-            and doi_record.get_bibtex_abstract() != robo_description
-        ):
-            self.logger.debug(
-                f"[{doi_record.material_id}]: Updates from Robo collection"
-            )
-            to_update = True
-            doi_record.valid = False
-        else:
-            if doi_record.valid is False:
-                # and dont forget to set it back
-                self.logger.debug(
-                    f"[{doi_record.material_id}] is now valid, setting Valid to True"
-                )
-                doi_record.valid = True
-                to_update = True
-
-        doi_record.last_validated_on = datetime.now()
-        if to_update:
-            doi_record.last_updated = datetime.now()
+    def create_bibtex_string(self, entry: dict):
+        db = bibtexparser.bibdatabase.BibDatabase()
+        db.entries = [entry]
+        return bibtexparser.dumps(db) if entry is not None else None
 
     def get_material_description(self, mp_id: str) -> str:
         """
@@ -547,7 +588,6 @@ class DoiBuilder(Builder):
 
     @classmethod
     def from_dict(cls, d: dict):
-        # assert "elsevier" in d, "Error: elsevier config not found"
         assert (
             "materials_collection" in d
         ), "Error: materials_collection config not found"
@@ -567,6 +607,7 @@ class DoiBuilder(Builder):
             json.dumps(d["robocrys_collection"]), cls=MontyDecoder
         )
         doi_store = json.loads(json.dumps(d["dois_collection"]), cls=MontyDecoder)
+        report_emails = d["report_emails"]
 
         max_doi_requests = d["max_doi_requests"]
         sync = d["sync"]
@@ -576,17 +617,61 @@ class DoiBuilder(Builder):
             doi_store=doi_store,
             elink=elink,
             explorer=explorer,
-            # elsevier=elsevier,
             max_doi_requests=max_doi_requests,
             sync=sync,
+            report_emails=report_emails,
         )
         return bld
 
-    # def generate_elsevier_model(
-    #     self, material: MaterialModel
-    # ) -> ElsevierPOSTContainerModel:
-    #     doi = self.get_doi(mp_id=material.task_id)
-    #     description = self.get_material_description(material.task_id)
-    #     return ElsevierPOSTContainerModel.from_material_model(
-    #         material=material, doi=doi, description=description
-    #     )
+    def send_email(self):
+        try:
+            self.generate_report()
+            self.logger.info(f"Sending Email to {self.report_emails}")
+            fromaddr = "mpcite.debug@gmail.com"
+            toaddr = ",".join(self.report_emails)
+            msg = MIMEMultipart()  # instance of MIMEMultipart
+            msg["From"] = fromaddr  # storing the senders email address
+            msg["To"] = toaddr  # storing the receivers email address
+            msg[
+                "Subject"
+            ] = f"MPCite Run data of {datetime.now()}"  # storing the subject
+            body = ""  # string to store the body of the mail
+            for m in self.email_messages:
+                body = body + "\n" + m
+            msg.attach(MIMEText(body, "plain"))  # attach the body with the msg instance
+            filename = "Visualizations.pdf"  # open the file to be sent
+            attachment = open("Visualizations.pdf", "rb")
+            p = MIMEBase(
+                "application", "octet-stream"
+            )  # instance of MIMEBase and named as p
+            p.set_payload(
+                (attachment).read()
+            )  # To change the payload into encoded form
+            encoders.encode_base64(p)  # encode into base64
+            p.add_header("Content-Disposition", "attachment; filename= %s" % filename)
+            msg.attach(p)  # attach the instance 'p' to instance 'msg'
+            s = smtplib.SMTP("smtp.gmail.com", 587)  # creates SMTP session
+            s.starttls()  # start TLS for security
+            s.login(fromaddr, "wuxiaohua1011")  # Authentication
+            text = msg.as_string()  # Converts the Multipart msg into a string
+            s.sendmail(fromaddr, toaddr, text)  # sending the mail
+            s.quit()  # terminating the session
+        except Exception as e:
+            self.logger.error(f"Error sending email: {e}")
+
+    def generate_report(self):
+        self.logger.info("Generating Report")
+        base = Path(__file__).parent
+        config_file_name = base / "config_ipynb.txt"
+        config_file = config_file_name.open("w")
+        config_file.write(self.config_file_path)
+        config_file.close()
+        notebook_file_path = base / "Visualizations.ipynb"
+        nb = nbformat.read(notebook_file_path.open("r"), as_version=4)
+        ep = ExecutePreprocessor(timeout=600, kernel_name="python3")
+        ep.preprocess(nb)
+        pdf_exporter = PDFExporter()
+        pdf_data, resources = pdf_exporter.from_notebook_node(nb)
+        with open("Visualizations.pdf", "wb") as f:
+            f.write(pdf_data)
+            f.close()
