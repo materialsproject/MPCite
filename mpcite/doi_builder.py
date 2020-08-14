@@ -125,17 +125,26 @@ class DoiBuilder(Builder):
         Returns:
             a list of State for each record that needs an update / registration
         """
-        if self.sync:
-            self.logger.info("Start Syncing with E-Link")
-            try:
-                self.sync_doi_collection()
-            except Exception as e:
-                self.logger.error(
-                    "SYNC failed, abort syncing, directly continuing to finding new materials. "
-                    "Please notify system administrator \n Error: {}".format(e)
-                )
+        update_ids = self.doi_store.distinct(
+            self.doi_store.key, criteria={"valid": False}
+        )
+        if len(update_ids) < 1000:
+            if self.sync:
+                self.logger.info("Start Syncing with E-Link")
+                try:
+                    self.sync_doi_collection()
+                except Exception as e:
+                    self.logger.error(
+                        "SYNC failed, abort syncing, directly continuing to finding new materials. "
+                        "Please notify system administrator \n Error: {}".format(e)
+                    )
+            else:
+                self.logger.info("Not syncing in this iteration")
         else:
-            self.logger.info("Not syncing in this iteration")
+            self.logger.info(
+                f"NOTE: you already have {len(update_ids)} records that are invalid and will be sent for "
+                f"update. For efficiency purpose, im not going to sync"
+            )
 
         update_ids = self.doi_store.distinct(
             self.doi_store.key, criteria={"valid": False}
@@ -662,10 +671,6 @@ class DoiBuilder(Builder):
     def generate_report(self):
         self.logger.info("Generating Report")
         base = Path(__file__).parent
-        config_file_name = base / "config_ipynb.txt"
-        config_file = config_file_name.open("w")
-        config_file.write(self.config_file_path)
-        config_file.close()
         notebook_file_path = base / "Visualizations.ipynb"
         nb = nbformat.read(notebook_file_path.open("r"), as_version=4)
         ep = ExecutePreprocessor(timeout=600, kernel_name="python3")

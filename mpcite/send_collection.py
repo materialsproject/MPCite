@@ -31,7 +31,7 @@ bld.config_file_path = config_file.as_posix()
 
 records = [
     CollectionsModel(
-        relidentifiersblock=[["mp-1"]],
+        relidentifiersblock=[["mp-1", "mp-2", "mp-1"]],
         contributors=[
             {
                 "first_name": "Michael",
