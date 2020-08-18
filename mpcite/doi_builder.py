@@ -19,13 +19,14 @@ import json
 import bibtexparser
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
-from nbconvert import PDFExporter
 from pathlib import Path
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+
+# from nbconvert import PDFExporter
+# import smtplib
+# from email.mime.multipart import MIMEMultipart
+# from email.mime.text import MIMEText
+# from email.mime.base import MIMEBase
+# from email import encoders
 
 
 class DoiBuilder(Builder):
@@ -635,48 +636,55 @@ class DoiBuilder(Builder):
     def send_email(self):
         try:
             self.generate_report()
-            self.logger.info(f"Sending Email to {self.report_emails}")
-            fromaddr = "mpcite.debug@gmail.com"
-            toaddr = ",".join(self.report_emails)
-            msg = MIMEMultipart()  # instance of MIMEMultipart
-            msg["From"] = fromaddr  # storing the senders email address
-            msg["To"] = toaddr  # storing the receivers email address
-            msg[
-                "Subject"
-            ] = f"MPCite Run data of {datetime.now()}"  # storing the subject
-            body = ""  # string to store the body of the mail
-            for m in self.email_messages:
-                body = body + "\n" + m
-            msg.attach(MIMEText(body, "plain"))  # attach the body with the msg instance
-            filename = "Visualizations.pdf"  # open the file to be sent
-            attachment = open("Visualizations.pdf", "rb")
-            p = MIMEBase(
-                "application", "octet-stream"
-            )  # instance of MIMEBase and named as p
-            p.set_payload(
-                (attachment).read()
-            )  # To change the payload into encoded form
-            encoders.encode_base64(p)  # encode into base64
-            p.add_header("Content-Disposition", "attachment; filename= %s" % filename)
-            msg.attach(p)  # attach the instance 'p' to instance 'msg'
-            s = smtplib.SMTP("smtp.gmail.com", 587)  # creates SMTP session
-            s.starttls()  # start TLS for security
-            s.login(fromaddr, "wuxiaohua1011")  # Authentication
-            text = msg.as_string()  # Converts the Multipart msg into a string
-            s.sendmail(fromaddr, toaddr, text)  # sending the mail
-            s.quit()  # terminating the session
+            # self.logger.info(f"Sending Email to {self.report_emails}")
+            # fromaddr = "mpcite.debug@gmail.com"
+            # toaddr = ",".join(self.report_emails)
+            # msg = MIMEMultipart()  # instance of MIMEMultipart
+            # msg["From"] = fromaddr  # storing the senders email address
+            # msg["To"] = toaddr  # storing the receivers email address
+            # msg[
+            #     "Subject"
+            # ] = f"MPCite Run data of {datetime.now()}"  # storing the subject
+            # body = ""  # string to store the body of the mail
+            # for m in self.email_messages:
+            #     body = body + "\n" + m
+            # msg.attach(MIMEText(body, "plain"))  # attach the body with the msg instance
+            # filename = "Visualizations.pdf"  # open the file to be sent
+            # attachment = open("Visualizations.pdf", "rb")
+            # p = MIMEBase(
+            #     "application", "octet-stream"
+            # )  # instance of MIMEBase and named as p
+            # p.set_payload(
+            #     (attachment).read()
+            # )  # To change the payload into encoded form
+            # encoders.encode_base64(p)  # encode into base64
+            # p.add_header("Content-Disposition", "attachment; filename= %s" % filename)
+            # msg.attach(p)  # attach the instance 'p' to instance 'msg'
+            # s = smtplib.SMTP("smtp.gmail.com", 587)  # creates SMTP session
+            # s.starttls()  # start TLS for security
+            # s.login(fromaddr, "wuxiaohua1011")  # Authentication
+            # text = msg.as_string()  # Converts the Multipart msg into a string
+            # s.sendmail(fromaddr, toaddr, text)  # sending the mail
+            # s.quit()  # terminating the session
         except Exception as e:
             self.logger.error(f"Error sending email: {e}")
 
     def generate_report(self):
+        from nbconvert import HTMLExporter
+
         self.logger.info("Generating Report")
         base = Path(__file__).parent
         notebook_file_path = base / "Visualizations.ipynb"
         nb = nbformat.read(notebook_file_path.open("r"), as_version=4)
         ep = ExecutePreprocessor(timeout=600, kernel_name="python3")
         ep.preprocess(nb)
-        pdf_exporter = PDFExporter()
-        pdf_data, resources = pdf_exporter.from_notebook_node(nb)
-        with open("Visualizations.pdf", "wb") as f:
-            f.write(pdf_data)
+        # pdf_exporter = PDFExporter()
+        # pdf_data, resources = pdf_exporter.from_notebook_node(nb)
+        # with open("Visualizations.pdf", "wb") as f:
+        #     f.write(pdf_data)
+        #     f.close()
+        html_exporter = HTMLExporter()
+        html_data, resources = html_exporter.from_notebook_node(nb)
+        with open("Visualizations.html", "wb") as f:
+            f.write(html_data.encode("utf8"))
             f.close()
