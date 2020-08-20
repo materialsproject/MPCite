@@ -21,13 +21,6 @@ import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
 from pathlib import Path
 
-# from nbconvert import PDFExporter
-# import smtplib
-# from email.mime.multipart import MIMEMultipart
-# from email.mime.text import MIMEText
-# from email.mime.base import MIMEBase
-# from email import encoders
-
 
 class DoiBuilder(Builder):
     """
@@ -635,37 +628,49 @@ class DoiBuilder(Builder):
 
     def send_email(self):
         try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.mime.base import MIMEBase
+
+            # from email import encoders
+
             self.generate_report()
-            # self.logger.info(f"Sending Email to {self.report_emails}")
-            # fromaddr = "mpcite.debug@gmail.com"
-            # toaddr = ",".join(self.report_emails)
-            # msg = MIMEMultipart()  # instance of MIMEMultipart
-            # msg["From"] = fromaddr  # storing the senders email address
-            # msg["To"] = toaddr  # storing the receivers email address
-            # msg[
-            #     "Subject"
-            # ] = f"MPCite Run data of {datetime.now()}"  # storing the subject
-            # body = ""  # string to store the body of the mail
-            # for m in self.email_messages:
-            #     body = body + "\n" + m
+            self.logger.info(f"Sending Email to {self.report_emails}")
+            fromaddr = "mpcite.debug@gmail.com"
+            toaddr = ",".join(self.report_emails)
+            msg = MIMEMultipart()  # instance of MIMEMultipart
+            msg["From"] = fromaddr  # storing the senders email address
+            msg["To"] = toaddr  # storing the receivers email address
+            msg[
+                "Subject"
+            ] = f"MPCite Run data of {datetime.now()}"  # storing the subject
+            body = (
+                "" if len(self.email_messages) > 0 else "This run did not do anything"
+            )
+
+            for m in self.email_messages:
+                body = body + "\n" + m
+            body = MIMEText(body)
+            msg.attach(body)
             # msg.attach(MIMEText(body, "plain"))  # attach the body with the msg instance
             # filename = "Visualizations.pdf"  # open the file to be sent
             # attachment = open("Visualizations.pdf", "rb")
-            # p = MIMEBase(
-            #     "application", "octet-stream"
-            # )  # instance of MIMEBase and named as p
+            p = MIMEBase(
+                "application", "octet-stream"
+            )  # instance of MIMEBase and named as p
             # p.set_payload(
             #     (attachment).read()
             # )  # To change the payload into encoded form
             # encoders.encode_base64(p)  # encode into base64
             # p.add_header("Content-Disposition", "attachment; filename= %s" % filename)
-            # msg.attach(p)  # attach the instance 'p' to instance 'msg'
-            # s = smtplib.SMTP("smtp.gmail.com", 587)  # creates SMTP session
-            # s.starttls()  # start TLS for security
-            # s.login(fromaddr, "wuxiaohua1011")  # Authentication
-            # text = msg.as_string()  # Converts the Multipart msg into a string
-            # s.sendmail(fromaddr, toaddr, text)  # sending the mail
-            # s.quit()  # terminating the session
+            msg.attach(p)  # attach the instance 'p' to instance 'msg'
+            s = smtplib.SMTP("smtp.gmail.com", 587)  # creates SMTP session
+            s.starttls()  # start TLS for security
+            s.login(fromaddr, "wuxiaohua1011")  # Authentication
+            text = msg.as_string()  # Converts the Multipart msg into a string
+            s.sendmail(fromaddr, toaddr, text)  # sending the mail
+            s.quit()  # terminating the session
         except Exception as e:
             self.logger.error(f"Error sending email: {e}")
 
@@ -678,11 +683,6 @@ class DoiBuilder(Builder):
         nb = nbformat.read(notebook_file_path.open("r"), as_version=4)
         ep = ExecutePreprocessor(timeout=600, kernel_name="python3")
         ep.preprocess(nb)
-        # pdf_exporter = PDFExporter()
-        # pdf_data, resources = pdf_exporter.from_notebook_node(nb)
-        # with open("Visualizations.pdf", "wb") as f:
-        #     f.write(pdf_data)
-        #     f.close()
         html_exporter = HTMLExporter()
         html_data, resources = html_exporter.from_notebook_node(nb)
         with open("Visualizations.html", "wb") as f:
