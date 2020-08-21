@@ -122,23 +122,23 @@ class DoiBuilder(Builder):
         update_ids = self.doi_store.distinct(
             self.doi_store.key, criteria={"valid": False}
         )
-        if len(update_ids) < 1000:
-            if self.sync:
-                self.logger.info("Start Syncing with E-Link")
-                try:
-                    self.sync_doi_collection()
-                except Exception as e:
-                    self.logger.error(
-                        "SYNC failed, abort syncing, directly continuing to finding new materials. "
-                        "Please notify system administrator \n Error: {}".format(e)
-                    )
-            else:
-                self.logger.info("Not syncing in this iteration")
+        # if len(update_ids) < 1000:
+        if self.sync:
+            self.logger.info("Start Syncing with E-Link")
+            try:
+                self.sync_doi_collection()
+            except Exception as e:
+                self.logger.error(
+                    "SYNC failed, abort syncing, directly continuing to finding new materials. "
+                    "Please notify system administrator \n Error: {}".format(e)
+                )
         else:
-            self.logger.info(
-                f"NOTE: you already have {len(update_ids)} records that are invalid and will be sent for "
-                f"update. For efficiency purpose, im not going to sync"
-            )
+            self.logger.info("Not syncing in this iteration")
+        # else:
+        #     self.logger.info(
+        #         f"NOTE: you already have {len(update_ids)} records that are invalid and will be sent for "
+        #         f"update. For efficiency purpose, im not going to sync"
+        #     )
 
         update_ids = self.doi_store.distinct(
             self.doi_store.key, criteria={"valid": False}
