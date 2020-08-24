@@ -147,11 +147,22 @@ class ELinkAdapter(Adapter):
         Returns:
             xml data in bytes, ready to be sent via request module
         """
-        xml = dicttoxml(items, custom_root="records", attr_type=False)
+
+        def my_item_func(x):
+            if x == "contributors":
+                return "contributor"
+            elif x == "records":
+                return "record"
+
+        xml = dicttoxml(
+            items, custom_root="records", attr_type=False, item_func=my_item_func
+        )
         records_xml = parseString(xml)
         items = records_xml.getElementsByTagName("item")
         for item in items:
             records_xml.renameNode(item, "", item.parentNode.nodeName[:-1])
+        for item in records_xml.getElementsByTagName("contributor"):
+            item.setAttribute("contributorType", "Researcher")
         return records_xml.toxml().encode("utf-8")
 
     def get(self, mpid_or_ostiid: str) -> Union[None, ELinkGetResponseModel]:

@@ -119,9 +119,9 @@ class DoiBuilder(Builder):
         Returns:
             a list of State for each record that needs an update / registration
         """
-        update_ids = self.doi_store.distinct(
-            self.doi_store.key, criteria={"valid": False}
-        )
+        # update_ids = self.doi_store.distinct(
+        #     self.doi_store.key, criteria={"valid": False}
+        # )
         # if len(update_ids) < 1000:
         if self.sync:
             self.logger.info("Start Syncing with E-Link")
@@ -427,7 +427,7 @@ class DoiBuilder(Builder):
             key=self.doi_store.key,
         )
 
-        message = f"Validated [{len(doi_records)}] DOI Records"
+        message = f"Updated [{len(doi_records)}] DOI Records with newest info from Materials and RoboCrystal Collection"
         self.email_messages.append(message)
         self.logger.info(message)
 
@@ -497,7 +497,9 @@ class DoiBuilder(Builder):
             docs=[record.dict() for record in doi_records_from_download],
             key=self.doi_store.key,
         )
-        message = f"Downloaded [{len(doi_records_from_download)}] records from Elink"
+        message = (
+            f"Downloaded & Synced [{len(doi_records_from_download)}] records from Elink"
+        )
         self.email_messages.append(message)
         self.logger.info(message)
 

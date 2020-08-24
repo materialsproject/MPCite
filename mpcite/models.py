@@ -48,6 +48,10 @@ class ELinkGetResponseModel(BaseModel):
     dataset_type: str = Field(default="SM")
     title: str = Field(...)
     creators: str = Field(default="Kristin Persson")
+    contributors: List[Dict[str, str]] = Field(
+        default=[{"first_name": "Materials", "last_name": "Project"}],
+        description="List of Dict of first name, last name mapping",
+    )
     product_nos: str = Field(..., title="MP id")
     accession_num: str = Field(..., title="MP id")
     contract_nos: str = Field("AC02-05CH11231; EDCBEE")
@@ -63,7 +67,7 @@ class ELinkGetResponseModel(BaseModel):
     site_url: str = Field(...)
     contact_name: str = Field(default="Kristin Persson")
     contact_org: str = Field(default="LBNL")
-    contact_email: str = Field(default="kapersson@lbl.gov")
+    contact_email: str = Field(default="feedback@materialsproject.org")
     contact_phone: str = Field(default="+1(510)486-7218")
     related_resource: str = Field("https://materialsproject.org/citing")
     contributor_organizations: str = Field(default="MIT; UC Berkeley; Duke; U Louvain")
