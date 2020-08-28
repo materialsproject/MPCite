@@ -11,7 +11,7 @@ from mpcite.models import (
     DOIRecordStatusEnum,
 )
 from urllib3.exceptions import HTTPError
-from datetime import datetime
+import datetime
 from tqdm import tqdm
 from maggma.stores import Store
 from monty.json import MontyDecoder
@@ -139,9 +139,17 @@ class DoiBuilder(Builder):
         #         f"NOTE: you already have {len(update_ids)} records that are invalid and will be sent for "
         #         f"update. For efficiency purpose, im not going to sync"
         #     )
-
+        yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
+        # update the items with last_updated > yesterday
         update_ids = self.doi_store.distinct(
-            self.doi_store.key, criteria={"valid": False}
+            self.doi_store.key,
+            criteria={
+                "$and": [
+                    {"valid": False},
+                    {"last_updated": {"$gt": yesterday}},
+                    {"status": {"$ne": DOIRecordStatusEnum.PENDING.value}},
+                ]
+            },
         )
         self.logger.debug(
             f"Found [{len(update_ids)}] materials that are invalid, need to be updated"
@@ -167,11 +175,18 @@ class DoiBuilder(Builder):
                 new_doi_record = DOIRecordModel(
                     material_id=ID, status=DOIRecordStatusEnum["INIT"], valid=False
                 )
+                self.logger.info(
+                    f"Requesting New DOI for Material {new_doi_record.material_id}"
+                )
                 yield new_doi_record
             else:
-                yield DOIRecordModel.parse_obj(
+                record: DOIRecordModel = DOIRecordModel.parse_obj(
                     self.doi_store.query_one(criteria={self.doi_store.key: ID})
                 )
+                self.logger.info(
+                    f"Updating DDI Record of mp-id={record.material_id}. DOI={record.doi}"
+                )
+                yield record
 
     def process_item(self, item: DOIRecordModel) -> Union[None, dict]:
         """
@@ -194,9 +209,6 @@ class DoiBuilder(Builder):
                 criteria={self.materials_store.key: item.material_id}
             )
             material = MaterialModel.parse_obj(material)
-            self.logger.info(
-                "Processing document with task_id = {}".format(material.task_id)
-            )
             elink_post_record = self.generate_elink_model(material=material)
             # elsevier_post_record = self.generate_elsevier_model(material=material)
             return {
@@ -230,6 +242,7 @@ class DoiBuilder(Builder):
         Returns:
 
         """
+        weekno = datetime.datetime.today().weekday()
         if len(items) == 0:
             return
         self.logger.info(f"Start Updating/registering {len(items)} items")
@@ -252,46 +265,56 @@ class DoiBuilder(Builder):
                 )
         # post it
         try:
-
-            # Elink POST
-            self.logger.info(f"POST-ing {len(elink_post_data)} to Elink")
-            data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
-            elink_post_responses: List[
-                ELinkPostResponseModel
-            ] = self.elink_adapter.post(data=data)
-            self.logger.info(f"Processing {len(elink_post_responses)} Elink Responses")
-            for elink_post_response in tqdm(elink_post_responses):
-                record: DOIRecordModel = records_dict[elink_post_response.accession_num]
-                record.doi = elink_post_response.doi["#text"]
-                record.status = DOIRecordStatusEnum[
-                    elink_post_response.doi["@status"]
-                ].value
-                record.valid = (
-                    True if record.status == DOIRecordStatusEnum.COMPLETED else False
+            if weekno > 5:
+                msg = "It is weekend, not updating"
+                self.logger.info(msg)
+                self.email_messages.append(msg)
+            else:
+                # Elink POST
+                self.logger.info(f"POST-ing {len(elink_post_data)} to Elink")
+                data: bytes = ELinkAdapter.prep_posting_data(elink_post_data)
+                elink_post_responses: List[
+                    ELinkPostResponseModel
+                ] = self.elink_adapter.post(data=data)
+                self.logger.info(
+                    f"Processing {len(elink_post_responses)} Elink Responses"
                 )
-                record.last_validated_on = datetime.now()
-                record.last_updated = datetime.now()
-                record.error = (
-                    f"Unkonwn error happend when pushing to ELINK. "
-                    f"Material ID = {record.material_id} | DOi = {record.doi}"
-                    if record.status == DOIRecordStatusEnum.FAILURE
-                    else None
+                for elink_post_response in tqdm(elink_post_responses):
+                    record: DOIRecordModel = records_dict[
+                        elink_post_response.accession_num
+                    ]
+                    record.doi = elink_post_response.doi["#text"]
+                    record.status = DOIRecordStatusEnum[
+                        elink_post_response.doi["@status"]
+                    ].value
+                    record.valid = (
+                        True
+                        if record.status == DOIRecordStatusEnum.COMPLETED
+                        else False
+                    )
+                    record.last_validated_on = datetime.datetime.now()
+                    record.last_updated = datetime.datetime.now()
+                    record.error = (
+                        f"Unkonwn error happend when pushing to ELINK. "
+                        f"Material ID = {record.material_id} | DOi = {record.doi}"
+                        if record.status == DOIRecordStatusEnum.FAILURE
+                        else None
+                    )
+
+                self.logger.info("Updating local DOI collection")
+                self.doi_store.update(
+                    docs=[r.dict() for r in records_dict.values()],
+                    key=self.doi_store.key,
                 )
-
-            self.logger.info("Updating local DOI collection")
-            self.doi_store.update(
-                docs=[r.dict() for r in records_dict.values()], key=self.doi_store.key
-            )
-            self.logger.debug(
-                f"Updated records with mp_ids: {[r.material_id for r in records_dict.values()]} "
-            )
-            message = (
-                f"Attempted to update / register [{len(records_dict)}] record(s) "
-                f"- [{len(records_dict) - len(elink_post_responses)}] Failed"
-            )
-            self.email_messages.append(message)
-            self.logger.info(message)
-
+                self.logger.debug(
+                    f"Updated records with mp_ids: {[r.material_id for r in records_dict.values()]} "
+                )
+                message = (
+                    f"Attempted to update / register [{len(records_dict)}] record(s) "
+                    f"- [{len(records_dict) - len(elink_post_responses)}] Failed"
+                )
+                self.email_messages.append(message)
+                self.logger.info(message)
         except Exception as e:
             self.has_error = True
             self.logger.error(f"Failed to POST. No updates done. Error: \n{e}")
@@ -387,7 +410,7 @@ class DoiBuilder(Builder):
         self.logger.info("Updating DOI Collection")
         update_doi_record_count = 0
         for doi_record in tqdm(doi_records):
-            doi_record.last_validated_on = datetime.now()
+            doi_record.last_validated_on = datetime.datetime.now()
             doi_record_abstract = doi_record.get_bibtex_abstract()
             robo_description = robos_dict.get(doi_record.material_id, None)
 
@@ -403,7 +426,7 @@ class DoiBuilder(Builder):
                 doi_record.status = DOIRecordStatusEnum[
                     elink_records_dict[doi_record.get_osti_id()].doi["@status"]
                 ]
-                doi_record.last_updated = datetime.now()
+                doi_record.last_updated = datetime.datetime.now()
                 update_doi_record_count += 1
 
             if doi_record_abstract != robo_description:
@@ -477,11 +500,11 @@ class DoiBuilder(Builder):
                 bibtex=None,
                 status=elink_record.doi["@status"],
                 valid=False,
-                last_validated_on=datetime.now(),
-                created_at=datetime.now()
+                last_validated_on=datetime.datetime.now(),
+                created_at=datetime.datetime.now()
                 if elink_record.accession_num not in curr_records
                 else curr_records[elink_record.accession_num].created_at,
-                last_updated=datetime.now()
+                last_updated=datetime.datetime.now()
                 if elink_record.accession_num not in curr_records
                 else curr_records[elink_record.accession_num].last_updated,
             )
@@ -646,7 +669,7 @@ class DoiBuilder(Builder):
             msg["To"] = toaddr  # storing the receivers email address
             msg[
                 "Subject"
-            ] = f"MPCite Run data of {datetime.now()}"  # storing the subject
+            ] = f"MPCite Run data of {datetime.datetime.now()}"  # storing the subject
             body = (
                 "" if len(self.email_messages) > 0 else "This run did not do anything"
             )
