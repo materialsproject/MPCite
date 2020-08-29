@@ -20,6 +20,7 @@ import bibtexparser
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
 from pathlib import Path
+from difflib import SequenceMatcher
 
 
 class DoiBuilder(Builder):
@@ -413,7 +414,6 @@ class DoiBuilder(Builder):
             doi_record.last_validated_on = datetime.datetime.now()
             doi_record_abstract = doi_record.get_bibtex_abstract()
             robo_description = robos_dict.get(doi_record.material_id, None)
-
             if robo_description is not None:
                 robo_description = robo_description.replace("  ", " ")
 
@@ -428,8 +428,9 @@ class DoiBuilder(Builder):
                 ]
                 doi_record.last_updated = datetime.datetime.now()
                 update_doi_record_count += 1
-
-            if doi_record_abstract != robo_description:
+            # when writing of this program, there's some problem in the robo crystal store, and therefore,
+            # this is a good estimation for similarity
+            if SequenceMatcher(a=robo_description, b=doi_record_abstract).ratio() < 0.8:
                 # mark this entry as needed to be updated
                 self.logger.debug(
                     f"[{doi_record.material_id}]'s abstract needs to be updated"
