@@ -413,9 +413,7 @@ class DoiBuilder(Builder):
         for doi_record in tqdm(doi_records):
             doi_record.last_validated_on = datetime.datetime.now()
             doi_record_abstract = doi_record.get_bibtex_abstract()
-            robo_description = robos_dict.get(doi_record.material_id, None)
-            if robo_description is not None:
-                robo_description = robo_description.replace("  ", " ")
+            robo_description = robos_dict.get(doi_record.material_id, "")
 
             if (
                 doi_record.status
