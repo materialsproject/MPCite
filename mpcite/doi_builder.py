@@ -180,13 +180,14 @@ class DoiBuilder(Builder):
         overall_ids = list(overall_ids)[: self.max_doi_requests]
         for ID in overall_ids:
             if ID in new_materials_ids:
-                new_doi_record = DOIRecordModel(
-                    material_id=ID, status=DOIRecordStatusEnum["INIT"], valid=False
-                )
-                self.logger.info(
-                    f"Requesting New DOI for Material {new_doi_record.material_id}"
-                )
-                yield new_doi_record
+                pass
+                # new_doi_record = DOIRecordModel(
+                #     material_id=ID, status=DOIRecordStatusEnum["INIT"], valid=False
+                # )
+                # self.logger.info(
+                #     f"Requesting New DOI for Material {new_doi_record.material_id}"
+                # )
+                # yield new_doi_record
             else:
                 record: DOIRecordModel = DOIRecordModel.parse_obj(
                     self.doi_store.query_one(criteria={self.doi_store.key: ID})
