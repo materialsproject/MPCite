@@ -140,7 +140,6 @@ class DoiBuilder(Builder):
         #         f"NOTE: you already have {len(update_ids)} records that are invalid and will be sent for "
         #         f"update. For efficiency purpose, im not going to sync"
         #     )
-        yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
         # update the items with last_updated > yesterday
         updates = set(
             self.doi_store.distinct(
@@ -148,8 +147,7 @@ class DoiBuilder(Builder):
                 criteria={
                     "$and": [
                         {"valid": False},
-                        {"last_updated": {"$gt": yesterday}},
-                        {"status": {"$ne": DOIRecordStatusEnum.PENDING.value}},
+                        {"status": {"$eq": DOIRecordStatusEnum.COMPLETED.value}},
                     ]
                 },
             )
@@ -180,14 +178,13 @@ class DoiBuilder(Builder):
         overall_ids = list(overall_ids)[: self.max_doi_requests]
         for ID in overall_ids:
             if ID in new_materials_ids:
-                pass
-                # new_doi_record = DOIRecordModel(
-                #     material_id=ID, status=DOIRecordStatusEnum["INIT"], valid=False
-                # )
-                # self.logger.info(
-                #     f"Requesting New DOI for Material {new_doi_record.material_id}"
-                # )
-                # yield new_doi_record
+                new_doi_record = DOIRecordModel(
+                    material_id=ID, status=DOIRecordStatusEnum["INIT"], valid=False
+                )
+                self.logger.info(
+                    f"Requesting New DOI for Material {new_doi_record.material_id}"
+                )
+                yield new_doi_record
             else:
                 record: DOIRecordModel = DOIRecordModel.parse_obj(
                     self.doi_store.query_one(criteria={self.doi_store.key: ID})
