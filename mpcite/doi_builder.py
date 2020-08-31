@@ -142,21 +142,28 @@ class DoiBuilder(Builder):
         #     )
         yesterday = datetime.datetime.now() - datetime.timedelta(days=1)
         # update the items with last_updated > yesterday
-        update_ids = self.doi_store.distinct(
-            self.doi_store.key,
-            criteria={
-                "$and": [
-                    {"valid": False},
-                    {"last_updated": {"$gt": yesterday}},
-                    {"status": {"$ne": DOIRecordStatusEnum.PENDING.value}},
-                ]
-            },
+        updates = set(
+            self.doi_store.distinct(
+                self.doi_store.key,
+                criteria={
+                    "$and": [
+                        {"valid": False},
+                        {"last_updated": {"$gt": yesterday}},
+                        {"status": {"$ne": DOIRecordStatusEnum.PENDING.value}},
+                    ]
+                },
+            )
         )
+        if len(updates) < self.max_doi_requests:
+            all_updates = self.doi_store.distinct(
+                self.doi_store.key, criteria={"valid": False}
+            )
+            updates = updates.union(all_updates)
         self.logger.debug(
-            f"Found [{len(update_ids)}] materials that are invalid, need to be updated"
+            f"Found [{len(updates)}] materials that are invalid, need to be updated"
         )
 
-        overall_ids = update_ids
+        overall_ids = updates
         new_materials_ids: Set[str] = set()
         if len(overall_ids) < self.max_doi_requests:
             failed_ids = set(
@@ -164,13 +171,13 @@ class DoiBuilder(Builder):
                     self.doi_store.key, criteria={"status": "FAILURE"}
                 )
             ) - set(overall_ids)
-            overall_ids.extend(failed_ids)
+            overall_ids = overall_ids.union(failed_ids)
         if len(overall_ids) < self.max_doi_requests:
             new_materials_ids = set(
                 self.materials_store.distinct(field=self.materials_store.key)
             ) - set(self.doi_store.distinct(field=self.doi_store.key))
-            overall_ids.extend(new_materials_ids)
-        overall_ids = overall_ids[: self.max_doi_requests]
+            overall_ids = overall_ids.union(new_materials_ids)
+        overall_ids = list(overall_ids)[: self.max_doi_requests]
         for ID in overall_ids:
             if ID in new_materials_ids:
                 new_doi_record = DOIRecordModel(
