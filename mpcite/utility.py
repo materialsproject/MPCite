@@ -239,11 +239,10 @@ class ELinkAdapter(Adapter):
             try:
                 num_found = parse(elink_response_xml)["records"]["@numfound"]
                 if num_found == "1":
-                    result.append(
-                        ELinkGetResponseModel.parse_obj(
-                            parse(elink_response_xml)["records"]["record"]
-                        )
-                    )
+                    ordered_dict: dict = parse(elink_response_xml)["records"]["record"]
+                    if "contributors" in ordered_dict:
+                        ordered_dict.pop("contributors")
+                    result.append(ELinkGetResponseModel.parse_obj(ordered_dict))
                 elif num_found == "0":
                     return []
                 else:

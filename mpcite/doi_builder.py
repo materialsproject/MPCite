@@ -350,6 +350,7 @@ class DoiBuilder(Builder):
         )
         # First I want to download all the data
         all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        all_keys = ["mp-1104424"]
         self.logger.info(f"Downloading [{len(all_keys)}] DOIs")
         elink_records, bibtex_dict = self.download_data(all_keys)
         elink_records_dict = ELinkAdapter.list_to_dict(
@@ -363,7 +364,9 @@ class DoiBuilder(Builder):
             )
         except Exception as e:
             self.has_error = True
-            self.logger.error(f"Updating Local DOI failed. Error: {e}")
+            msg = f"Updating Local DOI failed. Error: {e}"
+            self.logger.error(msg)
+            self.email_messages.append(msg)
 
         # now i want to cross check against my other databases to see if doi collection is up-to-date
         # first get a list of keys in doi store
@@ -419,7 +422,6 @@ class DoiBuilder(Builder):
             doi_record.last_validated_on = datetime.datetime.now()
             doi_record_abstract = doi_record.get_bibtex_abstract()
             robo_description = robos_dict.get(doi_record.material_id, "")
-
             if (
                 doi_record.status
                 != DOIRecordStatusEnum[
@@ -433,7 +435,11 @@ class DoiBuilder(Builder):
                 update_doi_record_count += 1
             # when writing of this program, there's some problem in the robo crystal store, and therefore,
             # this is a good estimation for similarity
-            if SequenceMatcher(a=robo_description, b=doi_record_abstract).ratio() < 0.8:
+            if (
+                doi_record_abstract is None
+                or SequenceMatcher(a=robo_description, b=doi_record_abstract).ratio()
+                < 0.8
+            ):
                 # mark this entry as needed to be updated
                 self.logger.debug(
                     f"[{doi_record.material_id}]'s abstract needs to be updated"
