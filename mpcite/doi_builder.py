@@ -140,7 +140,6 @@ class DoiBuilder(Builder):
         #         f"NOTE: you already have {len(update_ids)} records that are invalid and will be sent for "
         #         f"update. For efficiency purpose, im not going to sync"
         #     )
-        # update the items with last_updated > yesterday
         updates = set(
             self.doi_store.distinct(
                 self.doi_store.key,
@@ -350,6 +349,7 @@ class DoiBuilder(Builder):
         )
         # First I want to download all the data
         all_keys = self.materials_store.distinct(field=self.materials_store.key)
+        all_keys = all_keys[:200]
         self.logger.info(f"Downloading [{len(all_keys)}] DOIs")
         elink_records, bibtex_dict = self.download_data(all_keys)
         elink_records_dict = ELinkAdapter.list_to_dict(
@@ -450,6 +450,7 @@ class DoiBuilder(Builder):
                 doi_record.valid is False
                 and doi_record.status == DOIRecordStatusEnum.COMPLETED
             ):
+                self.logger.debug(f"Marking {doi_record.material_id} valid = True")
                 doi_record.valid = (
                     True
                 )  # if the bibtex is updated, flip the valid flag back to true
