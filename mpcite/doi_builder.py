@@ -349,7 +349,6 @@ class DoiBuilder(Builder):
         )
         # First I want to download all the data
         all_keys = self.materials_store.distinct(field=self.materials_store.key)
-        all_keys = all_keys[:200]
         self.logger.info(f"Downloading [{len(all_keys)}] DOIs")
         elink_records, bibtex_dict = self.download_data(all_keys)
         elink_records_dict = ELinkAdapter.list_to_dict(
@@ -683,7 +682,8 @@ class DoiBuilder(Builder):
             body = (
                 "" if len(self.email_messages) > 0 else "This run did not do anything"
             )
-
+            num_valids = self.doi_store.count(criteria={"valid": True})
+            self.email_messages.append(f"Number of Valid Records: [{num_valids}]")
             for m in self.email_messages:
                 body = body + "\n" + m
             body = MIMEText(body)
