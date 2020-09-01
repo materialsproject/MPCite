@@ -1,5 +1,5 @@
 import argparse
-from mpcite.doi_builder import DoiBuilder
+from mpcite.doi_builder import DOIBuilder
 from pathlib import Path
 import json
 import logging
@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
     assert args.config_file_path is not None, "Please provide a configuration file path"
     config_file = Path(args.config_file_path)
-    bld: DoiBuilder = json.load(config_file.open("r"), cls=MontyDecoder)
+    bld: DOIBuilder = json.load(config_file.open("r"), cls=MontyDecoder)
     bld.config_file_path = config_file.as_posix()
     tic = time.perf_counter()
     if args.debug is not None and args.debug:

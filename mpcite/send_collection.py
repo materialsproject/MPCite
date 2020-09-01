@@ -1,7 +1,7 @@
 from pathlib import Path
 from xml.dom.minidom import parseString
 from dicttoxml import dicttoxml
-from mpcite.doi_builder import DoiBuilder
+from mpcite.doi_builder2 import DOIBuilder
 import json
 from monty.json import MontyDecoder
 from pydantic import BaseModel, Field
@@ -26,7 +26,7 @@ class CollectionsModel(BaseModel):
 
 config_file = Path("/Users/michaelwu/Desktop/projects/MPCite/files/config_prod.json")
 
-bld: DoiBuilder = json.load(config_file.open("r"), cls=MontyDecoder)
+bld: DOIBuilder = json.load(config_file.open("r"), cls=MontyDecoder)
 bld.config_file_path = config_file.as_posix()
 
 records = [
