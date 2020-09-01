@@ -246,10 +246,11 @@ class ELinkAdapter(Adapter):
                 elif num_found == "0":
                     return []
                 else:
-                    result: List[ELinkGetResponseModel] = [
-                        ELinkGetResponseModel.parse_obj(record)
-                        for record in parse(elink_response_xml)["records"]["record"]
-                    ]
+                    result: List[ELinkGetResponseModel] = []
+                    for record in parse(elink_response_xml)["records"]["record"]:
+                        if "contributors" in record:
+                            record.pop("contributors")
+                        result.append(ELinkGetResponseModel.parse_obj(record))
             except Exception as e:
                 self.logger.error(
                     f"Cannot parse returned xml. Error: {e} \n{elink_response_xml}"
