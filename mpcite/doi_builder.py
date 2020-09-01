@@ -343,9 +343,7 @@ class DoiBuilder(Builder):
         """
         # find distinct mp_ids that needs to be checked against remote servers
         self.logger.info(
-            "Start Syncing all materials. Note that this operation will take very long, "
-            "you may terminate it at anypoint, nothing bad will happen. "
-            "You may turn off sync by setting the sync flag to False"
+            "Start Syncing all materials. Note that this operation will take very long."
         )
         # First I want to download all the data
         all_keys = self.materials_store.distinct(field=self.materials_store.key)
