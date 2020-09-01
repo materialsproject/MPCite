@@ -1,7 +1,7 @@
 from pathlib import Path
 from xml.dom.minidom import parseString
 from dicttoxml import dicttoxml
-from mpcite.doi_builder2 import DOIBuilder
+from mpcite.doi_builder import DOIBuilder
 import json
 from monty.json import MontyDecoder
 from pydantic import BaseModel, Field
