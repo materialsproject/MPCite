@@ -509,6 +509,9 @@ class DOIBuilder(Builder):
             )
             num_valids = self.doi_store.count(criteria={"valid": True})
             self.email_messages.append(f"Number of Valid Records: [{num_valids}]")
+            self.email_messages.append(
+                "View Visualizations at https://dois.materialsproject.org/"
+            )
             for m in self.email_messages:
                 body = body + "\n" + m
             body = MIMEText(body)
