@@ -24,7 +24,7 @@ def main():
         "-f",
         "--config_file_path",
         help="File path for the .json config file",
-        default="~/Desktop/project/MPCite/files/config_prod.json",
+        default="/Users/michaelwu/Desktop/projects/MPCite/files/config_prod.json",
     )
     parser.add_argument(
         "-debug", "--debug", type=str2bool, help="Debug option (T/F)", default="F"

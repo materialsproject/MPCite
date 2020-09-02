@@ -198,7 +198,8 @@ class DOIRecordModel(BaseModel):
             )
             if bib_db.entries:
                 return bib_db.entries[0]["abstractnote"]
-        except Exception:
+        except Exception as e:
+            print(e)
             return None
 
 

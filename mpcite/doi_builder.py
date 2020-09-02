@@ -81,6 +81,7 @@ class DOIBuilder(Builder):
         """
         if self.sync:
             self.download_and_sync()
+            self.log_info_msg("Data Synced")
         else:
             self.log_info_msg("Not Syncing in this run")
 
@@ -224,6 +225,7 @@ class DOIBuilder(Builder):
         try:
             self.log_info_msg("Start Syncing. This will take long")
             all_keys = self.materials_store.distinct(field=self.materials_store.key)
+            all_keys = all_keys[:500]
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
@@ -252,15 +254,20 @@ class DOIBuilder(Builder):
             Elink and bibtex record in mp_id -> record dictionary format
         """
         elink_records = self.elink_adapter.get_multiple(mp_ids=keys, chunk_size=100)
-        try:
-            bibtex_dict = self.explorer_adapter.get_multiple_bibtex(
-                osti_ids=[r.osti_id for r in elink_records], chunk_size=100
-            )
-        except HTTPError:
-            bibtex_dict = dict()
         elink_records_dict = ELinkAdapter.list_to_dict(
             elink_records
-        )  # osti_id -> elink_record
+        )  # mp_id -> elink_record
+        try:
+            bibtex_dict_raw = self.explorer_adapter.get_multiple_bibtex(
+                osti_ids=[r.osti_id for r in elink_records], chunk_size=100
+            )
+            bibtex_dict = dict()
+            for elink in elink_records_dict.values():
+                if elink.osti_id in bibtex_dict_raw:
+                    bibtex_dict[elink.accession_num] = bibtex_dict_raw[elink.osti_id]
+        except HTTPError:
+            bibtex_dict = dict()
+
         return elink_records_dict, bibtex_dict
 
     def sync_local_doi_collection(
@@ -284,7 +291,6 @@ class DOIBuilder(Builder):
                 criteria={self.doi_store.key: {"$in": list(elink_dict.keys())}}
             )
         }
-
         for mp_id, elink in tqdm(elink_dict.items()):
             doi_record: DOIRecordModel = DOIRecordModel(
                 material_id=mp_id,
@@ -300,13 +306,14 @@ class DOIBuilder(Builder):
                 if mp_id not in doi_records
                 else doi_records[mp_id].last_updated,
             )
-            bibtex_entry: dict = bibtex_dict.get(doi_record.get_osti_id(), None)
+            bibtex_entry: dict = bibtex_dict.get(doi_record.material_id, None)
             doi_record.bibtex = (
                 self._create_bibtex_string(bibtex_entry)
                 if bibtex_entry is not None
                 else None
             )
             doi_records[mp_id] = doi_record
+        self.log_info_msg("Updating Local DOI Collection. Please wait. ")
         self.doi_store.update(
             key=self.doi_store.key,
             docs=[record.dict() for record in doi_records.values()],
@@ -335,6 +342,7 @@ class DOIBuilder(Builder):
             None
 
         """
+        self.log_info_msg("Syncing Robo Crystal Description")
         all_keys = list(elink_dict.keys())
         robos: Dict[str, RoboCrysModel] = {
             RoboCrysModel.parse_obj(robo).material_id: RoboCrysModel.parse_obj(robo)
@@ -350,12 +358,14 @@ class DOIBuilder(Builder):
                 criteria={self.doi_store.key: {"$in": list(elink_dict.keys())}}
             )
         }
-        for mpid, doi_record in doi_records.items():
+        for mpid, doi_record in tqdm(doi_records.items()):
             doi_record_abstract = doi_record.get_bibtex_abstract()
-            robo_description = robos.get(doi_record.material_id, "")
+            robo = robos.get(doi_record.material_id, "")
             if (
                 doi_record_abstract is None
-                or SequenceMatcher(a=robo_description, b=doi_record_abstract).ratio()
+                or SequenceMatcher(
+                    a=robo.description[:200], b=doi_record_abstract[:200]
+                ).ratio()
                 < 0.8
             ):
                 # mark this entry as needed to be updated
@@ -364,8 +374,10 @@ class DOIBuilder(Builder):
                 )
                 doi_record.valid = False
             else:
-                if doi_record.status == DOIRecordStatusEnum.COMPLETED:
+                if doi_record.status == DOIRecordStatusEnum.COMPLETED.value:
+                    self.logger.info(f"Record {mpid} is now VALID")
                     doi_record.valid = True
+        self.log_info_msg("Updating Local DOI Collection. Please wait. ")
         self.doi_store.update(
             key=self.doi_store.key,
             docs=[doi_record.dict() for doi_record in doi_records.values()],
@@ -471,6 +483,7 @@ class DOIBuilder(Builder):
                 if record.status == DOIRecordStatusEnum.FAILURE
                 else None
             )
+        self.log_info_msg("Updating Local DOI Collection. Please wait. ")
         self.doi_store.update(
             key=self.doi_store.key, docs=[record.dict() for record in records.values()]
         )
@@ -480,7 +493,6 @@ class DOIBuilder(Builder):
             import smtplib
             from email.mime.multipart import MIMEMultipart
             from email.mime.text import MIMEText
-            from email.mime.base import MIMEBase
 
             self.generate_report()
             self.log_info_msg(f"Sending Email to {self.report_emails}")
@@ -501,10 +513,6 @@ class DOIBuilder(Builder):
                 body = body + "\n" + m
             body = MIMEText(body)
             msg.attach(body)
-            p = MIMEBase(
-                "application", "octet-stream"
-            )  # instance of MIMEBase and named as p
-            msg.attach(p)  # attach the instance 'p' to instance 'msg'
             s = smtplib.SMTP("smtp.gmail.com", 587)  # creates SMTP session
             s.starttls()  # start TLS for security
             s.login(fromaddr, "wuxiaohua1011")  # Authentication
@@ -525,6 +533,13 @@ class DOIBuilder(Builder):
         ep.preprocess(nb)
         html_exporter = HTMLExporter()
         html_data, resources = html_exporter.from_notebook_node(nb)
+        path = "/var/www/dois"
+        try:
+            with open(path, "wb") as f:
+                f.write(html_data.encode("utf8"))
+                f.close()
+        except Exception as e:
+            self.log_err_msg(f"Cannot write to [{path}]: {e}")
         with open("Visualizations.html", "wb") as f:
             f.write(html_data.encode("utf8"))
             f.close()
