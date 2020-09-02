@@ -535,7 +535,7 @@ class DOIBuilder(Builder):
         ep.preprocess(nb)
         html_exporter = HTMLExporter()
         html_data, resources = html_exporter.from_notebook_node(nb)
-        path = "/var/www/dois"
+        path = "/var/www/dois/index.html"
         try:
             with open(path, "wb") as f:
                 f.write(html_data.encode("utf8"))
