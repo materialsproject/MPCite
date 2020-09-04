@@ -220,7 +220,7 @@ class DOIBuilder(Builder):
         try:
             self.log_info_msg("Start Syncing. This will take long")
             all_keys = self.materials_store.distinct(field=self.materials_store.key)
-            # all_keys = all_keys[:500]
+            all_keys = all_keys[:500]
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
