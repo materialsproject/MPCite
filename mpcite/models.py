@@ -193,6 +193,8 @@ class DOIRecordModel(BaseModel):
 
     def get_bibtex_abstract(self):
         try:
+            if self.bibtex is None:
+                return ""
             bib_db: bibtexparser.bibdatabase.BibDatabase = bibtexparser.loads(
                 self.bibtex
             )
@@ -200,7 +202,7 @@ class DOIRecordModel(BaseModel):
                 return bib_db.entries[0]["abstractnote"]
         except Exception as e:
             print(e)
-            return None
+            return ""
 
 
 class OSTIDOIRecordModel(DOIRecordModel):

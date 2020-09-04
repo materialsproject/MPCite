@@ -146,23 +146,18 @@ class DOIBuilder(Builder):
             None
         """
         try:
-            weekno = datetime.datetime.today().weekday()
-            if weekno > 5:
-                self.log_info_msg(msg="It is weekend, not updating")
-            else:
-                self.log_info_msg(f"POSTing [{len(items)}] records to Elink")
-                elink_post_data: List[dict] = []
-                for item in tqdm(items):
-                    if len(item) == 0:
-                        continue
-                    if item.get("elink_post_record", None) is not None:
-                        elink_post_data.append(
-                            ELinkGetResponseModel.custom_to_dict(
-                                elink_record=item["elink_post_record"]
-                            )
+            self.log_info_msg(f"POSTing [{len(items)}] records to Elink")
+            elink_post_data: List[dict] = []
+            for item in tqdm(items):
+                if len(item) == 0:
+                    continue
+                if item.get("elink_post_record", None) is not None:
+                    elink_post_data.append(
+                        ELinkGetResponseModel.custom_to_dict(
+                            elink_record=item["elink_post_record"]
                         )
-                self.post_to_elink(elink_post_data=elink_post_data)
-
+                    )
+            self.post_to_elink(elink_post_data=elink_post_data)
         except Exception as e:
             self.has_error = True
             self.log_err_msg(msg=f"Failed to POST. No updates done. Error: \n{e}")
@@ -225,6 +220,7 @@ class DOIBuilder(Builder):
         try:
             self.log_info_msg("Start Syncing. This will take long")
             all_keys = self.materials_store.distinct(field=self.materials_store.key)
+            # all_keys = all_keys[:500]
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
@@ -358,24 +354,34 @@ class DOIBuilder(Builder):
             )
         }
         for mpid, doi_record in tqdm(doi_records.items()):
-            doi_record_abstract = doi_record.get_bibtex_abstract()
-            robo = robos.get(doi_record.material_id, "")
-            if (
-                doi_record_abstract is None
-                or SequenceMatcher(
-                    a=robo.description[:200], b=doi_record_abstract[:200]
-                ).ratio()
-                < 0.8
-            ):
-                # mark this entry as needed to be updated
-                self.logger.debug(
-                    f"[{doi_record.material_id}]'s abstract needs to be updated"
+            try:
+                doi_record_abstract = doi_record.get_bibtex_abstract()
+                robo = robos.get(doi_record.material_id, "")
+                doi_record_abstract = (
+                    "" if doi_record_abstract is None else doi_record_abstract
                 )
-                doi_record.valid = False
-            else:
-                if doi_record.status == DOIRecordStatusEnum.COMPLETED.value:
-                    self.logger.info(f"Record {mpid} is now VALID")
-                    doi_record.valid = True
+                robo = "" if robo is None else robo
+                if robo != "" and (
+                    doi_record_abstract == ""
+                    or SequenceMatcher(
+                        a=robo.description[:200], b=doi_record_abstract[:200]
+                    ).ratio()
+                    < 0.8
+                ):
+                    # mark this entry as needed to be updated
+                    self.logger.debug(
+                        f"[{doi_record.material_id}]'s abstract needs to be updated"
+                    )
+                    doi_record.valid = False
+                else:
+                    if doi_record.status == DOIRecordStatusEnum.COMPLETED.value:
+                        doi_record.valid = True
+                    else:
+                        doi_record.valid = False
+            except Exception as e:
+                self.log_err_msg(
+                    f"Skipping {mpid}.because something bad happened: {e} "
+                )
         self.log_info_msg("Updating Local DOI Collection. Please wait. ")
         self.doi_store.update(
             key=self.doi_store.key,
