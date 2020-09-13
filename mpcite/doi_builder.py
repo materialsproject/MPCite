@@ -21,7 +21,7 @@ import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
 from pathlib import Path
 from difflib import SequenceMatcher
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Tuple, Union
 
 
 class DOIBuilder(Builder):
@@ -219,8 +219,10 @@ class DOIBuilder(Builder):
     def download_and_sync(self):
         try:
             self.log_info_msg("Start Syncing. This will take long")
-            all_keys = self.materials_store.distinct(field=self.materials_store.key)
-            all_keys = all_keys[:500]
+            all_keys = self.materials_store.distinct(
+                field=self.materials_store.key
+            )  # this might fail in the future
+
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
@@ -353,31 +355,41 @@ class DOIBuilder(Builder):
                 criteria={self.doi_store.key: {"$in": list(elink_dict.keys())}}
             )
         }
+
+        def set_doi_status_helper(record: DOIRecordModel):
+            if record.status == DOIRecordStatusEnum.COMPLETED.value:
+                record.valid = True
+            else:
+                record.valid = False
+
         for mpid, doi_record in tqdm(doi_records.items()):
             try:
                 doi_record_abstract = doi_record.get_bibtex_abstract()
-                robo = robos.get(doi_record.material_id, "")
+                robo: Union[RoboCrysModel, str] = robos.get(doi_record.material_id, "")
                 doi_record_abstract = (
                     "" if doi_record_abstract is None else doi_record_abstract
                 )
-                robo = "" if robo is None else robo
-                if robo != "" and (
-                    doi_record_abstract == ""
-                    or SequenceMatcher(
-                        a=robo.description[:200], b=doi_record_abstract[:200]
-                    ).ratio()
-                    < 0.8
-                ):
-                    # mark this entry as needed to be updated
-                    self.logger.debug(
-                        f"[{doi_record.material_id}]'s abstract needs to be updated"
-                    )
-                    doi_record.valid = False
+
+                if type(robo) == str and robo == "":
+                    set_doi_status_helper(doi_record)
+                elif type(robo) == RoboCrysModel and robo.description is None:
+                    set_doi_status_helper(doi_record)
                 else:
-                    if doi_record.status == DOIRecordStatusEnum.COMPLETED.value:
-                        doi_record.valid = True
-                    else:
+                    if (
+                        doi_record_abstract == ""
+                        or SequenceMatcher(
+                            a=robo.description[:200], b=doi_record_abstract[:200]
+                        ).ratio()
+                        < 0.8
+                    ):
+                        # mark this entry as needed to be updated
+                        self.logger.debug(
+                            f"[{doi_record.material_id}]'s abstract needs to be updated"
+                        )
                         doi_record.valid = False
+                    else:
+                        set_doi_status_helper(doi_record)
+
             except Exception as e:
                 self.log_err_msg(
                     f"Skipping {mpid}.because something bad happened: {e} "

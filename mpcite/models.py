@@ -15,6 +15,7 @@ class RoboCrysModel(BaseModel):
     material_id: str
     last_updated: datetime
     description: Optional[str] = None
+    error: Optional[str] = None
 
     @classmethod
     def get_default_description(cls):
