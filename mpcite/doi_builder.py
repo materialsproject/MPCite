@@ -84,7 +84,6 @@ class DOIBuilder(Builder):
             self.log_info_msg("Data Synced")
         else:
             self.log_info_msg("Not Syncing in this run")
-
         curr_update_ids = set(
             self.doi_store.distinct(
                 self.doi_store.key,
@@ -99,7 +98,7 @@ class DOIBuilder(Builder):
         self.log_info_msg(f"[{len(curr_update_ids)}] requires priority updates")
         if len(curr_update_ids) < self.max_doi_requests:
             # send all other data with valid = False
-            curr_update_ids.union(
+            curr_update_ids = curr_update_ids.union(
                 set(
                     self.doi_store.distinct(
                         self.doi_store.key, criteria={"valid": False}
@@ -111,7 +110,7 @@ class DOIBuilder(Builder):
             self.materials_store.distinct(field=self.materials_store.key)
         ) - set(self.doi_store.distinct(field=self.doi_store.key))
         if len(curr_update_ids) < self.max_doi_requests:
-            curr_update_ids.union(new_materials_ids)
+            curr_update_ids = curr_update_ids.union(new_materials_ids)
             self.log_info_msg(f"[{len(new_materials_ids)}] requires new registration")
 
         curr_update_ids = list(curr_update_ids)[: self.max_doi_requests]
