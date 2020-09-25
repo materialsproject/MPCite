@@ -98,18 +98,20 @@ class DOIBuilder(Builder):
         self.log_info_msg(f"[{len(curr_update_ids)}] requires priority updates")
         if len(curr_update_ids) < self.max_doi_requests:
             # send all other data with valid = False
-            curr_update_ids = curr_update_ids.union(
+            normal_updates = (
                 set(
                     self.doi_store.distinct(
                         self.doi_store.key, criteria={"valid": False}
                     )
                 )
+                - curr_update_ids
             )
-            self.log_info_msg(f"[{len(curr_update_ids)}] requires normal updates")
-        new_materials_ids = set(
-            self.materials_store.distinct(field=self.materials_store.key)
-        ) - set(self.doi_store.distinct(field=self.doi_store.key))
+            curr_update_ids = curr_update_ids.union(normal_updates)
+            self.log_info_msg(f"[{len(normal_updates)}] requires normal updates")
         if len(curr_update_ids) < self.max_doi_requests:
+            new_materials_ids = set(
+                self.materials_store.distinct(field=self.materials_store.key)
+            ) - set(self.doi_store.distinct(field=self.doi_store.key))
             curr_update_ids = curr_update_ids.union(new_materials_ids)
             self.log_info_msg(f"[{len(new_materials_ids)}] requires new registration")
 
@@ -253,7 +255,11 @@ class DOIBuilder(Builder):
         elink_records_dict = ELinkAdapter.list_to_dict(
             elink_records
         )  # mp_id -> elink_record
+        self.log_info_msg(
+            f"Found and downded [{len(elink_records_dict)}] records from ELink."
+        )
         try:
+            self.log_info_msg("Downloading Bibtex")
             bibtex_dict_raw = self.explorer_adapter.get_multiple_bibtex(
                 osti_ids=[r.osti_id for r in elink_records], chunk_size=100
             )
@@ -261,6 +267,9 @@ class DOIBuilder(Builder):
             for elink in elink_records_dict.values():
                 if elink.osti_id in bibtex_dict_raw:
                     bibtex_dict[elink.accession_num] = bibtex_dict_raw[elink.osti_id]
+            self.log_info_msg(
+                f"Found and downded [{len(bibtex_dict)}] records from Explorer."
+            )
         except HTTPError:
             bibtex_dict = dict()
 
