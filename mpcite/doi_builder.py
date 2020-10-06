@@ -165,6 +165,11 @@ class DOIBuilder(Builder):
 
     def finalize(self):
         self.log_info_msg(f"DOI store now has {self.doi_store.count()} records")
+        self.log_info_msg(
+            f"[{self.doi_store.count(criteria={'valid':True})}] are valid. "
+            f"[{self.doi_store.count(criteria={'valid':False})}] are invalid"
+        )
+
         self.send_email()
         super(DOIBuilder, self).finalize()
 
@@ -223,7 +228,7 @@ class DOIBuilder(Builder):
             all_keys = self.materials_store.distinct(
                 field=self.materials_store.key
             )  # this might fail in the future
-
+            # all_keys = all_keys[:200]
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
@@ -272,7 +277,8 @@ class DOIBuilder(Builder):
             )
         except HTTPError:
             bibtex_dict = dict()
-
+        except Exception as e:
+            raise HTTPError(f"Downloading Bibtex Failed {e}")
         return elink_records_dict, bibtex_dict
 
     def sync_local_doi_collection(
@@ -302,7 +308,9 @@ class DOIBuilder(Builder):
                 doi=elink.doi["#text"],
                 bibtex=None,
                 status=elink.doi["@status"],
-                valid=False,
+                valid=True
+                if elink.doi["@status"] == DOIRecordStatusEnum.COMPLETED.value
+                else False,
                 last_validated_on=datetime.datetime.now(),
                 created_at=datetime.datetime.now()
                 if mp_id not in doi_records
