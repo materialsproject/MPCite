@@ -308,9 +308,7 @@ class DOIBuilder(Builder):
                 doi=elink.doi["#text"],
                 bibtex=None,
                 status=elink.doi["@status"],
-                valid=True
-                if elink.doi["@status"] == DOIRecordStatusEnum.COMPLETED.value
-                else False,
+                valid=doi_records[mp_id].valid,
                 last_validated_on=datetime.datetime.now(),
                 created_at=datetime.datetime.now()
                 if mp_id not in doi_records
