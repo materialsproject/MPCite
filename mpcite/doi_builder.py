@@ -228,7 +228,6 @@ class DOIBuilder(Builder):
             all_keys = self.materials_store.distinct(
                 field=self.materials_store.key
             )  # this might fail in the future
-            # all_keys = all_keys[:200]
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
@@ -261,7 +260,7 @@ class DOIBuilder(Builder):
             elink_records
         )  # mp_id -> elink_record
         self.log_info_msg(
-            f"Found and downded [{len(elink_records_dict)}] records from ELink."
+            f"Found and downloaded [{len(elink_records_dict)}] records from ELink."
         )
         try:
             self.log_info_msg("Downloading Bibtex")
