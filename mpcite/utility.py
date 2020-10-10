@@ -428,7 +428,6 @@ class ExplorerAdapter(Adapter):
             if r.content.decode() == "":
                 return dict()
             result = self.parse_bibtex(r.content.decode())
-
             return result
         else:
             raise HTTPError(f"Query for OSTI IDs = {osti_ids} failed")

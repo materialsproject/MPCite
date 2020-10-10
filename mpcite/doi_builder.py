@@ -79,6 +79,10 @@ class DOIBuilder(Builder):
         Returns:
             Iterable DOIRecordModel
         """
+        #     updates_ids = self.doi_store.distinct(field=self.doi_store.key, criteria={
+        # "$and": [ {"valid":False}, {"bibtex":  None}, {"status": "COMPLETED"}
+        # ]})
+        #     print(updates_ids)
         if self.sync:
             self.download_and_sync()
             self.log_info_msg("Data Synced")
@@ -267,6 +271,7 @@ class DOIBuilder(Builder):
             bibtex_dict_raw = self.explorer_adapter.get_multiple_bibtex(
                 osti_ids=[r.osti_id for r in elink_records], chunk_size=100
             )
+            # print(bibtex_dict_raw.keys())
             bibtex_dict = dict()
             for elink in elink_records_dict.values():
                 if elink.osti_id in bibtex_dict_raw:
