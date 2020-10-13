@@ -44,7 +44,6 @@ class DOIBuilder(Builder):
         self.materials_store = materials_store
         self.robocrys_store = robocrys_store
         self.doi_store = doi_store
-        # self.elsevier = elsevier
         self.elink = elink
         self.explorer = explorer
         self.elink_adapter = ELinkAdapter(elink)
@@ -79,10 +78,6 @@ class DOIBuilder(Builder):
         Returns:
             Iterable DOIRecordModel
         """
-        #     updates_ids = self.doi_store.distinct(field=self.doi_store.key, criteria={
-        # "$and": [ {"valid":False}, {"bibtex":  None}, {"status": "COMPLETED"}
-        # ]})
-        #     print(updates_ids)
         if self.sync:
             self.download_and_sync()
             self.log_info_msg("Data Synced")
@@ -118,7 +113,6 @@ class DOIBuilder(Builder):
             ) - set(self.doi_store.distinct(field=self.doi_store.key))
             curr_update_ids = curr_update_ids.union(new_materials_ids)
             self.log_info_msg(f"[{len(new_materials_ids)}] requires new registration")
-
         curr_update_ids = list(curr_update_ids)[: self.max_doi_requests]
         self.log_info_msg(
             msg=f"Updating/registering items with mp_id \n{curr_update_ids}"
@@ -170,8 +164,8 @@ class DOIBuilder(Builder):
     def finalize(self):
         self.log_info_msg(f"DOI store now has {self.doi_store.count()} records")
         self.log_info_msg(
-            f"[{self.doi_store.count(criteria={'valid':True})}] are valid. "
-            f"[{self.doi_store.count(criteria={'valid':False})}] are invalid"
+            f"[{self.doi_store.count(criteria={'valid': True})}] are valid. "
+            f"[{self.doi_store.count(criteria={'valid': False})}] are invalid"
         )
 
         self.send_email()
@@ -271,7 +265,6 @@ class DOIBuilder(Builder):
             bibtex_dict_raw = self.explorer_adapter.get_multiple_bibtex(
                 osti_ids=[r.osti_id for r in elink_records], chunk_size=100
             )
-            # print(bibtex_dict_raw.keys())
             bibtex_dict = dict()
             for elink in elink_records_dict.values():
                 if elink.osti_id in bibtex_dict_raw:
@@ -312,7 +305,7 @@ class DOIBuilder(Builder):
                 doi=elink.doi["#text"],
                 bibtex=None,
                 status=elink.doi["@status"],
-                valid=doi_records[mp_id].valid,
+                valid=False if mp_id not in doi_records else doi_records[mp_id].valid,
                 last_validated_on=datetime.datetime.now(),
                 created_at=datetime.datetime.now()
                 if mp_id not in doi_records
@@ -435,7 +428,9 @@ class DOIBuilder(Builder):
             title=ELinkGetResponseModel.get_title(material=material),
             product_nos=material.task_id,
             accession_num=material.task_id,
-            publication_date=material.last_updated.strftime("%m/%d/%Y"),
+            publication_date=material.last_updated.strftime("%m/%d/%Y")
+            if material.last_updated is not None
+            else material.updated_at.strftime("%m/%d/%Y"),
             site_url=ELinkGetResponseModel.get_site_url(mp_id=material.task_id),
             keywords=ELinkGetResponseModel.get_keywords(material=material),
             description=self.get_material_description(material.task_id),
@@ -491,20 +486,26 @@ class DOIBuilder(Builder):
             data=data
         )
         self.logger.info(f"Processing {len(elink_post_responses)} Elink Responses")
-        records: Dict[str, DOIRecordModel] = {
-            DOIRecordModel.parse_obj(record).material_id: DOIRecordModel.parse_obj(
-                record
-            )
-            for record in self.doi_store.query(
-                criteria={
-                    self.doi_store.key: {
-                        "$in": [e_p.accession_num for e_p in elink_post_responses]
-                    }
+        # first get dois from local doi database for later comparison
+        records: Dict[str, DOIRecordModel] = dict()
+        for record in self.doi_store.query(
+            criteria={
+                self.doi_store.key: {
+                    "$in": [e_p.accession_num for e_p in elink_post_responses]
                 }
-            )
-        }
+            }
+        ):
+            if record is not None:
+                obj = DOIRecordModel.parse_obj(record)
+                records[obj.material_id] = obj
+        # do comparison. if the record is not local dois, make sure to add it
         for e_p in tqdm(elink_post_responses):
-            record: DOIRecordModel = records[e_p.accession_num]
+            record: DOIRecordModel = records.get(
+                e_p.accession_num,
+                DOIRecordModel(
+                    material_id=e_p.accession_num, status=DOIRecordStatusEnum.PENDING
+                ),
+            )
             record.doi = e_p.doi["#text"]
             record.status = DOIRecordStatusEnum[e_p.doi["@status"]].value
             record.valid = (
@@ -518,6 +519,8 @@ class DOIBuilder(Builder):
                 if record.status == DOIRecordStatusEnum.FAILURE
                 else None
             )
+            if e_p.accession_num not in records:
+                records[record.material_id] = record
         self.log_info_msg("Updating Local DOI Collection. Please wait. ")
         self.doi_store.update(
             key=self.doi_store.key, docs=[record.dict() for record in records.values()]

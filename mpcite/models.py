@@ -32,6 +32,7 @@ class MaterialModel(BaseModel):
     last_updated: datetime = Field(
         None, title="timestamp for the most recent calculation"
     )
+    updated_at: datetime = Field(None, title="alternative to last_updated")
     created_at: datetime = Field(
         None,
         description="creation time for this material defined by when the first structure "
@@ -40,7 +41,8 @@ class MaterialModel(BaseModel):
     task_id: str = Field(
         "", title="task id for this material. Also called the material id"
     )
-    formula_pretty: str = Field(..., title="clean representation of the formula")
+    # pretty_formula: str = Field(..., title="clean representation of the formula")
+    pretty_formula: str = Field(..., title="clean representation of the formula")
     chemsys: str
 
 
@@ -81,7 +83,7 @@ class ELinkGetResponseModel(BaseModel):
 
     @classmethod
     def get_title(cls, material: MaterialModel):
-        formula = material.formula_pretty
+        formula = material.pretty_formula
         return "Materials Data on %s by Materials Project" % formula
 
     @classmethod
@@ -91,7 +93,7 @@ class ELinkGetResponseModel(BaseModel):
     @classmethod
     def get_keywords(cls, material):
         keywords = "; ".join(
-            ["crystal structure", material.formula_pretty, material.chemsys]
+            ["crystal structure", material.pretty_formula, material.chemsys]
         )
         return keywords
 
@@ -255,7 +257,7 @@ class ElsevierPOSTContainerModel(BaseModel):
 
     @classmethod
     def get_keywords(cls, material: MaterialModel):
-        return ["crystal structure", material.formula_pretty, material.chemsys]
+        return ["crystal structure", material.pretty_formula, material.chemsys]
 
     @classmethod
     def get_default_description(cls):
@@ -277,16 +279,16 @@ class ElsevierPOSTContainerModel(BaseModel):
 
     @classmethod
     def get_title(cls, material: MaterialModel) -> str:
-        return material.formula_pretty
+        return material.pretty_formula
 
     @classmethod
     def from_material_model(cls, material: MaterialModel, doi: str, description: str):
         model = ElsevierPOSTContainerModel(
             identifier=material.task_id,
-            title=material.formula_pretty,
+            title=material.pretty_formula,
             doi=doi,
             url="https://materialsproject.org/materials/%s" % material.task_id,
-            keywords=["crystal structure", material.formula_pretty, material.chemsys],
+            keywords=["crystal structure", material.pretty_formula, material.chemsys],
             date=datetime.now().date().__str__(),
             dateCreated=material.created_at.date().__str__(),
             dateAvailable=ElsevierPOSTContainerModel.get_date_available(material),
