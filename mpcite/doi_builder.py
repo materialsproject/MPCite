@@ -226,7 +226,7 @@ class DOIBuilder(Builder):
         try:
             self.log_info_msg("Start Syncing. This will take long")
             all_keys = self.materials_store.distinct(
-                field=self.materials_store.key
+                field=self.materials_store.key, criteria={"sbxn": "core"}
             )  # this might fail in the future
 
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
