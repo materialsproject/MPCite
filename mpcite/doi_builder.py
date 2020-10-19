@@ -109,7 +109,9 @@ class DOIBuilder(Builder):
             self.log_info_msg(f"[{len(normal_updates)}] requires normal updates")
         if len(curr_update_ids) < self.max_doi_requests:
             new_materials_ids = set(
-                self.materials_store.distinct(field=self.materials_store.key)
+                self.materials_store.distinct(
+                    field=self.materials_store.key, criteria={"sbxn": "core"}
+                )
             ) - set(self.doi_store.distinct(field=self.doi_store.key))
             curr_update_ids = curr_update_ids.union(new_materials_ids)
             self.log_info_msg(f"[{len(new_materials_ids)}] requires new registration")
@@ -226,6 +228,7 @@ class DOIBuilder(Builder):
             all_keys = self.materials_store.distinct(
                 field=self.materials_store.key
             )  # this might fail in the future
+
             self.log_info_msg(f"[{len(all_keys)}] requires syncing")
             elink_dict, bibtex_dict = self.download_data(all_keys)
             self.sync_local_doi_collection(elink_dict, bibtex_dict)
