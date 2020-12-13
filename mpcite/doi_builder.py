@@ -83,6 +83,7 @@ class DOIBuilder(Builder):
             self.log_info_msg("Data Synced")
         else:
             self.log_info_msg("Not Syncing in this run")
+
         curr_update_ids = set(
             self.doi_store.distinct(
                 self.doi_store.key,
@@ -110,7 +111,8 @@ class DOIBuilder(Builder):
         if len(curr_update_ids) < self.max_doi_requests:
             new_materials_ids = set(
                 self.materials_store.distinct(
-                    field=self.materials_store.key, criteria={"sbxn": "core"}
+                    field=self.materials_store.key,
+                    criteria={"$and": [{"sbxd.id": "core"}, {"sbxn": "core"}]},
                 )
             ) - set(self.doi_store.distinct(field=self.doi_store.key))
             curr_update_ids = curr_update_ids.union(new_materials_ids)
@@ -119,7 +121,8 @@ class DOIBuilder(Builder):
         self.log_info_msg(
             msg=f"Updating/registering items with mp_id \n{curr_update_ids}"
         )
-        return curr_update_ids
+
+        return []
 
     def process_item(self, item: str) -> Optional[Dict]:
         """
