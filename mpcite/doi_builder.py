@@ -122,7 +122,7 @@ class DOIBuilder(Builder):
             msg=f"Updating/registering items with mp_id \n{curr_update_ids}"
         )
 
-        return []
+        return curr_update_ids
 
     def process_item(self, item: str) -> Optional[Dict]:
         """
