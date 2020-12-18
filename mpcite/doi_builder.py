@@ -83,7 +83,8 @@ class DOIBuilder(Builder):
             self.log_info_msg("Data Synced")
         else:
             self.log_info_msg("Not Syncing in this run")
-
+        today = datetime.datetime.now()
+        d = today - datetime.timedelta(days=2)
         curr_update_ids = set(
             self.doi_store.distinct(
                 self.doi_store.key,
@@ -91,6 +92,7 @@ class DOIBuilder(Builder):
                     "$and": [
                         {"valid": False},
                         {"status": {"$eq": DOIRecordStatusEnum.COMPLETED.value}},
+                        {"last_updated": {"$gte": d}},
                     ]
                 },
             )
@@ -101,7 +103,14 @@ class DOIBuilder(Builder):
             normal_updates = (
                 set(
                     self.doi_store.distinct(
-                        self.doi_store.key, criteria={"valid": False}
+                        self.doi_store.key,
+                        criteria={
+                            "$and": [
+                                {"last_updated": {"$gte": d}},
+                                {"status": "PEDNING"},
+                                {"valid": False},
+                            ]
+                        },
                     )
                 )
                 - curr_update_ids
