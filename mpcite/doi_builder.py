@@ -107,7 +107,7 @@ class DOIBuilder(Builder):
                         criteria={
                             "$and": [
                                 {"last_updated": {"$gte": d}},
-                                {"status": "PEDNING"},
+                                {"status": "PENDING"},
                                 {"valid": False},
                             ]
                         },
