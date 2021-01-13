@@ -80,8 +80,8 @@ theoretical and experimental data contributed by our users through "MPContribs"
 scientific domains where the number of data records demands the high-throughput
 and continuous allocation of DOIs.
 
-[1] MPCite, https://github.com/materialsproject/MPCite  
-[2] OSTI, https://www.osti.gov  
-[3] Example Materials Detail Page for As (mp-10), http://dx.doi.org/10.17188/1184812  
-[4] Plotly, https://plot.ly  
+[1] MPCite, https://github.com/materialsproject/MPCite
+[2] OSTI, https://www.osti.gov
+[3] Example Materials Detail Page for As (mp-10), http://dx.doi.org/10.17188/1184812
+[4] Plotly, https://plot.ly
 [5] MPContribs, arXiv:1510.05024, arXiv:1510.05727, MRS Spring 2016

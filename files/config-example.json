@@ -1,0 +1,58 @@
+{
+  "materials_collection": {
+    "@module": "maggma.stores.mongolike",
+    "@class": "MongoStore",
+    "@version": "0.20.1.dev36+g6fc637b",
+    "database": "mp_core",
+    "collection_name": "",
+    "host": "",
+    "port": 2,
+    "username": "",
+    "password": "",
+    "key": ""
+  },
+  "robocrys_collection": {
+    "@module": "maggma.stores.mongolike",
+    "@class": "MongoStore",
+    "@version": "",
+    "database": "",
+    "collection_name": "",
+    "host": "",
+    "port": 2,
+    "username": "",
+    "password": "",
+    "key": ""
+  },
+  "dois_collection": {
+    "@module": "maggma.stores.mongolike",
+    "@class": "MongoStore",
+    "@version": "0.20.1.dev36+g6fc637b",
+    "database": "",
+    "collection_name": "",
+    "host": "",
+    "port": 2,
+    "username": "",
+    "password": "",
+    "key": ""
+  },
+  "elink": {
+    "endpoint": "https://www.osti.gov/elinktest/2416api",
+    "username": "",
+    "password": ""
+  },
+  "explorer": {
+    "endpoint": "https://staging.osti.gov/dataexplorer/api/v1/records/",
+    "username": "",
+    "password": ""
+  },
+  "elsevier": {
+    "endpoint": "https://push-feature.datasearch.elsevier.com/container",
+    "username": "",
+    "password": ""
+  },
+  "max_doi_requests": 0,
+  "sync": false,
+  "@module": "mpcite.doi_builder",
+  "@class": "DoiBuilder",
+  "@version": null
+}
