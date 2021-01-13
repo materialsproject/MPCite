@@ -12,6 +12,7 @@ setup(
     name=package_name,
     version="1.0.0",
     description=metadata["doc"],
+    python_requires=">3.6.2",
     author="Patrick Huck & Michael Wu",
     author_email="phuck@lbl.gov",
     url="https://github.com/materialsproject/MPCite",

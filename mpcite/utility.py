@@ -266,7 +266,7 @@ class ELinkAdapter(Adapter):
         cls, responses: List[ELinkGetResponseModel]
     ) -> Dict[str, ELinkGetResponseModel]:
         """
-        helper method to turn a list of ELinkGetResponseModel to mapping of osti_id -> ELinkGetResponseModel
+        helper method to turn a list of ELinkGetResponseModel to mapping of mpid -> ELinkGetResponseModel
 
         Args:
             responses: list of Elink Responses
@@ -274,11 +274,11 @@ class ELinkAdapter(Adapter):
         Returns:
             dictionary in the format of
             {
-                osti_id : ELinkGetResponseModel
+                mp_id : ELinkGetResponseModel
             }
         """
 
-        return {r.osti_id: r for r in responses}
+        return {r.accession_num: r for r in responses}
 
     def process_elink_post_responses(
         self, responses: List[ELinkPostResponseModel]
@@ -428,7 +428,6 @@ class ExplorerAdapter(Adapter):
             if r.content.decode() == "":
                 return dict()
             result = self.parse_bibtex(r.content.decode())
-
             return result
         else:
             raise HTTPError(f"Query for OSTI IDs = {osti_ids} failed")

@@ -7,6 +7,14 @@ for computed and contributed Materials Data in the Materials Project
           SciPy16 (http://scipy2016.scipy.org/ehome/146062/332963/)
 ```
 
+## Quick Start
+`pip install -r requirements.txt`
+
+`python setup.py install`
+
+`mpcite --config-file YOUR_PROJ_DIR/files/config.json`
+
+
 ## Brief Description
 
 “MPCite” enables the continuous request, validation, and dissemination of
