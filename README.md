@@ -9,7 +9,9 @@ for computed and contributed Materials Data in the Materials Project
 
 ## Quick Start
 `pip install -r requirements.txt`
+
 `python setup.py install`
+
 `mpcite --config-file YOUR_PROJ_DIR/files/config.json`
 
 
