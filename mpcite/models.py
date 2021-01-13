@@ -50,11 +50,11 @@ class ELinkGetResponseModel(BaseModel):
     osti_id: Optional[str] = Field(...)
     dataset_type: str = Field(default="SM")
     title: str = Field(...)
-    creators: str = Field(default="Kristin Persson")
+    creators: str = Field(default="Kristin Persson")  # replace with authors
     contributors: List[Dict[str, str]] = Field(
         default=[{"first_name": "Materials", "last_name": "Project"}],
         description="List of Dict of first name, last name mapping",
-    )
+    )  # no contributor
     product_nos: str = Field(..., title="MP id")
     accession_num: str = Field(..., title="MP id")
     contract_nos: str = Field("AC02-05CH11231; EDCBEE")
