@@ -218,7 +218,7 @@ class DOIBuilder(Builder):
             json.dumps(d["robocrys_collection"]), cls=MontyDecoder
         )
         doi_store = json.loads(json.dumps(d["dois_collection"]), cls=MontyDecoder)
-        report_emails = d["report_emails"]
+        report_emails = d["report_emails"] if "report_emails" in d else None
 
         max_doi_requests = d["max_doi_requests"]
         sync = d["sync"]
