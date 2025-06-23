@@ -317,11 +317,3 @@ class ExplorerGetJSONResponseModel(BaseModel):
     sponsor_orgs: List[str]
     research_orgs: List[str]
     links: List[Dict[str, str]]
-
-# Added to resolve failed import in test_doi_builder.py
-class MongoConnectionModel(ConnectionModel):
-    database: str = Field(..., title="MongoDB Database Name")
-    collection: str = Field(..., title="MongoDB Collection Name")
-
-    def get_connection_string(self) -> str:
-        return f"mongodb://{self.username}:{self.password}@{self.endpoint}/{self.database}"
