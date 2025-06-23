@@ -45,6 +45,14 @@
     "username": "",
     "password": ""
   },
+  "elsevier": {
+    "endpoint": "https://push-feature.datasearch.elsevier.com/container",
+    "username": "",
+    "password": ""
+  },
   "max_doi_requests": 0,
-  "sync": false
+  "sync": false,
+  "@module": "mpcite.doi_builder",
+  "@class": "DoiBuilder",
+  "@version": null
 }
