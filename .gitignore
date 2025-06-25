@@ -15,3 +15,4 @@ files/config_test.json
 .pytest_cache
 .ipynb_checkpoints
 *.json
+.env
