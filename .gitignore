@@ -209,6 +209,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+*.json
+.env
 
 json_pages/
 notebooks/
