@@ -1,0 +1,92 @@
+osti_id=1190959 
+workflow_status='R' 
+access_limitations=['UNL'] 
+access_limitation_other=None 
+announcement_codes=None 
+availability=None 
+edition=None 
+volume=None 
+conference_information=None
+conference_type=None
+contract_award_date=None
+country_publication_code='US'
+doe_funded_flag=None
+doe_supported_flag=False 
+doi='10.17188/1190959' 
+doi_infix=None 
+edit_reason=None 
+geolocations=None 
+format_information='' 
+invention_disclosure_flag=None 
+issue=None 
+journal_license_url=None 
+journal_name=None 
+journal_open_access_flag=None 
+journal_type=None 
+keywords=['crystal structure', 'Si', 'Si'] 
+languages=['English'] 
+monographic_title=None 
+opn_addressee=None 
+opn_declassified_date=None 
+opn_declassified_status=None 
+opn_document_categories=None 
+opn_document_location=None 
+opn_fieldoffice_acronym_code=None 
+other_information=None 
+ouo_release_date=None 
+pams_publication_status=None 
+pams_publication_status_other=None 
+pams_authors=None 
+pams_editors=None 
+pams_product_sub_type=None 
+pams_patent_country_code=None 
+pams_transnational_patent_office=None 
+paper_flag=False 
+patent_assignee=None 
+patent_file_date=None 
+patent_priority_date=None 
+pdouo_exemption_number=None 
+peer_reviewed_flag=False 
+product_size=None 
+product_type='DA' 
+product_type_other=None 
+prot_flag=None 
+prot_data_other=None 
+prot_release_date=None 
+publication_date=datetime.date(2020, 7, 15) 
+publication_date_text='07/15/2020' 
+publisher_information=None 
+related_doc_info='https://materialsproject.org/citing' 
+released_to_osti_date=None 
+releasing_official_comments=None 
+report_period_end_date=None 
+report_period_start_date=None 
+report_types=None 
+report_type_other=None 
+sbiz_flag=None 
+sbiz_phase=None 
+sbiz_previous_contract_number=None 
+sbiz_release_date=None 
+site_ownership_code='LBNL-MP' 
+site_unique_id='mp-149' 
+subject_category_code=['36'] 
+subject_category_code_legacy=None 
+title='Materials Data on Si by Materials Project' 
+description='Si is diamond structured and crystallizes in the cubic Fd-3m space group. The structure is three-dimensional. Si is bonded to four equivalent Si atoms to form corner-sharing SiSi4 tetrahedra. All Si–Si bond lengths are 2.37 Å.' 
+identifiers=[Identifier(type='CN_DOE', value='AC02-05CH11231'), Identifier(type='CN_NONDOE', value='EDCBEE'), Identifier(type='RN', value='mp-149')] 
+persons=[Person(type='CONTACT', first_name='Kristin', middle_name=None, last_name='Persson', orcid=None, phone='+1(510)486-7218', email=['feedback@materialsproject.org'], affiliations=[Affiliation(name='LBNL', ror_id=None)], contributor_type=None)] 
+organizations=[Organization(type='CONTRIBUTING', name='The Materials Project', contributor_type='ResearchGroup', identifiers=[], ror_id=None), Organization(type='RESEARCHING', name='LBNL Materials Project', contributor_type=None, identifiers=[], ror_id=None), Organization(type='SPONSOR', name='USDOE Office of Science (SC), Basic Energy Sciences (BES) (SC-22)', contributor_type=None, identifiers=[], ror_id=None), Organization(type='RESEARCHING', name='Lawrence Berkeley National Laboratory (LBNL), Berkeley, CA (United States)', contributor_type=None, identifiers=[], ror_id=None), Organization(type='CONTRIBUTING', name='MIT', contributor_type='Other', identifiers=[], ror_id=None), Organization(type='CONTRIBUTING', name='UC Berkeley', contributor_type='Other', identifiers=[], ror_id=None), Organization(type='CONTRIBUTING', name='Duke', contributor_type='Other', identifiers=[], ror_id=None), Organization(type='CONTRIBUTING', name='U Louvain', contributor_type='Other', identifiers=[], ror_id=None)] related_identifiers=[RelatedIdentifier(type='DOI', relation='IsReferencedBy', value='10.1103/physrevmaterials.4.013401')] 
+site_url='https://materialsproject.org/materials/mp-149' 
+revision=18 
+added_by=234169 
+edited_by=None 
+collection_type='DOE_LAB' 
+date_metadata_added=datetime.datetime(2015, 7, 7, 22, 9, 4, 275000, tzinfo=TzInfo(UTC)) 
+date_metadata_updated=datetime.datetime(2021, 7, 15, 2, 10, 43, 372000, tzinfo=TzInfo(UTC)) 
+date_submitted_to_osti_first=datetime.datetime(2015, 7, 7, 22, 9, 5, 808000, tzinfo=TzInfo(UTC)) 
+date_submitted_to_osti_last=datetime.datetime(2021, 7, 15, 2, 10, 42, 407000, tzinfo=TzInfo(UTC)) 
+date_released=datetime.datetime(2021, 7, 15, 2, 10, 43, 240000, tzinfo=TzInfo(UTC)) 
+sensitivity_flag='U' 
+hidden_flag=False 
+media=[MediaInfo(media_id=841489, revision=1, osti_id=1190959, status='C', added_by=None, document_page_count=1, mime_type='text/html', media_title=None, media_location='O', media_source='DOE2416API', date_added=datetime.datetime(2015, 7, 7, 22, 9, 4, 875000, tzinfo=TzInfo(UTC)), date_updated=datetime.datetime(2015, 7, 8, 2, 50, 53, 78000, tzinfo=TzInfo(UTC)), date_valid_start=None, date_valid_end=None, files=[MediaFile(media_file_id=4514486, media_id=841489, revision=1, parent_media_file_id=None, status='DONE', media_type='O', url_type='O', url='https://materialsproject.org/materials/mp-149', added_by=None, document_page_count=None, file_size_bytes=None, duration_seconds=None, subtitle_tracks=None, video_tracks=None, mime_type='text/html', media_source='DOE2416API', date_file_added=datetime.datetime(2015, 7, 7, 22, 9, 4, 875000, tzinfo=TzInfo(UTC)), date_file_updated=datetime.datetime(2015, 7, 8, 2, 50, 52, 857000, tzinfo=TzInfo(UTC))), MediaFile(media_file_id=4515065, media_id=841489, revision=1, parent_media_file_id=None, status='DONE', media_type='C', url_type='L', url=None, added_by=None, document_page_count=1, file_size_bytes=15546, duration_seconds=0, subtitle_tracks=None, video_tracks=None, mime_type='text/html', media_source='OFF_SITE_DOWNLOAD', date_file_added=datetime.datetime(2015, 7, 8, 2, 50, 52, 877000, tzinfo=TzInfo(UTC)), date_file_updated=datetime.datetime(2015, 7, 8, 2, 50, 53, 96000, tzinfo=TzInfo(UTC))), MediaFile(media_file_id=4515066, media_id=841489, revision=1, parent_media_file_id=None, status='DONE', media_type='T', url_type='L', url=None, added_by=None, document_page_count=1, file_size_bytes=5593, duration_seconds=0, subtitle_tracks=None, video_tracks=None, mime_type='text/plain', media_source='TEXT_EXTRACTION', date_file_added=datetime.datetime(2015, 7, 8, 2, 50, 53, 78000, tzinfo=TzInfo(UTC)), date_file_updated=datetime.datetime(2015, 7, 8, 2, 50, 53, 83000, tzinfo=TzInfo(UTC)))])] 
+audit_logs=[]

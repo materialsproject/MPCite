@@ -16,3 +16,4 @@ files/config_test.json
 .ipynb_checkpoints
 *.json
 .env
+/json_pages
