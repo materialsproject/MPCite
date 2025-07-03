@@ -138,18 +138,49 @@ RecordResponse(
 
 from pydantic import BaseModel, ConfigDict
 import datetime
-from maggma.core.builder import Builder
-from maggma.stores import Store
 
 class doi_model(BaseModel):
     # identifiers
-    doi: str
-    title: str
-    osti_id: int
-    material_id: str
-    description: str
+    doi: str # can be taken from ELink API
+    title: str # can be taken from ELink API
+    osti_id: str # can be taken from ELink API
+    material_id: str # can be taken from Robocrys Collection or ELink API
 
     # time stamps
-    date_last_update: datetime.datetime
-    publication_date : datetime.datetime
-    elink_workflow_status: str
+    date_record_entered_onto_ELink: datetime.datetime # can be taken from ELink API response 
+    date_record_last_updated_on_Elink: datetime.datetime
+
+    # status
+    elink_workflow_status: str # can be taken from ELink API
+    date_released: datetime.datetime
+    date_submitted_to_osti_first: datetime.datetime
+    date_submitted_to_osti_last: datetime.datetime 
+    date_published: datetime.datetime # labelled as publication_date in RecordResponse of ELink API
+
+# hypothetically post an update or submit a new record and receive the RecordResponse
+def RecordResponse_to_doi_model(recordresponse):
+    '''
+    turns a recordresponse, which is returned from a save, submission, post, etc. into a doi_model object
+    '''
+    params = {
+        "doi": recordresponse.doi,
+        "title": recordresponse.title,
+        "osti_id": str(recordresponse.osti_id),
+        "material_id": recordresponse.site_unique_id,
+
+        "date_record_entered_onto_ELink": recordresponse.date_metadata_added,
+        "date_record_last_updated_on_Elink": recordresponse.date_metadata_updated,
+
+        "elink_workflow_status": recordresponse.workflow_status,
+        "date_released": recordresponse.date_released,
+        # date_released_to_osti = recordresponse.released_to_osti_date, # what is the difference between these??? "Date record information was released to OSTI, as entered by releasing official." always seems to be none
+        "date_submitted_to_osti_first": recordresponse.date_submitted_to_osti_first, # date record was first submitted to OSTI for publication, maintained internally by E-Link
+        "date_submitted_to_osti_last": recordresponse.date_submitted_to_osti_last, # most recent date record information was submitted to OSTI. Maintained internally by E-Link.
+        "date_published": recordresponse.publication_date
+    }
+
+    return doi_model(**params)
+
+def upload_doi_document_model_to_collection(doi_model, client, collection):
+    x = collection.insert_one(doi_model).inserted_id
+    return x

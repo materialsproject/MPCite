@@ -1,6 +1,7 @@
 import os
 import json
 from elinkapi import Elink, Record
+from elinkapi.record import RecordResponse
 from dotenv import load_dotenv
 
 import requests
@@ -28,57 +29,77 @@ mongo_uri = f"mongodb+srv://{atlas_user}:{atlas_password}@{atlas_host}/"
 
 failed_osti_ids = []
 
-query = prod_api.query_records()
+cwd = os.getcwd()
+path = "/json_pages/"
 
-# for every record in the OSTI production environment:
-for record in query:
-    # flag for update performance
-    update_success = False
+for filename in os.listdir(cwd+path):
+    logging.debug(f"Now extracting {filename}")
+    file = open(cwd + path + filename, "r")
+    for line in file:
+        record = RecordResponse(**json.loads(line.strip()))
+        record.osti_id = record.doi.split('/')[1]
+        # for every record in the OSTI production environment:
+        # flag for update performance
+        update_success = False
 
-    material_id = record.site_unique_id
+        material_id = record.site_unique_id
 
-    with MongoClient(mongo_uri) as client:
-        coll = client["mp_core_blue"]["robocrys"]
-        res = coll.find_one({"material_id" : material_id})
-    
-        if res != None:
-            robocrys_description = res["description"]
-            
-        # what if there is no document in robocrys found?
-
-    # if the description of the record on Elink doesnt match what is in the robocrys collection:
-    if record.description != robocrys_description:
-        # directly update the description of the record via the record response
-        record.description = robocrys_description
+        with MongoClient(mongo_uri) as client: # should I open this in or outside of the for loop?
+            coll = client["mp_core_blue"]["robocrys"]
+            res = coll.find_one({"material_id" : material_id})
         
-        # and directly update the identifier for sponsoring org
-        for entry in record.organizations:
-            if entry["type"] == "SPONSOR":
-                entry["identifiers"] = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
+            if res != None:
+                robocrys_description = res["description"]
+                
+            # what if there is no document in robocrys found?
+            else:
+                logging.warning(f"No robocrys document was found to match the OSTI record: {record.osti_id}!")
 
-        try:
-            # send update to the record with the record response # update_record(osti_id, record, state="save")
-            record_response = prod_api.update_record(record.osti_id, record, state="save")
-            update_success = True
+        # if the description of the record on Elink doesnt match what is in the robocrys collection:
+        if res != None and record.description != robocrys_description:
+            # directly update the description of the record via the record response
+            record.description = robocrys_description
+            
+            # and directly update the identifier for sponsoring org
+            for entry in record.organizations:
+                if entry.type == "SPONSOR":
+                    entry.identifiers = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
+                    break
 
-        except:
-            logging.debug("The update failed to save!")
-            # add the osti_id of the failed update to failed_osti_ids
-            failed_osti_ids.append(record.osti_id)
+            try:
+                # send update to the record with the record response # update_record(osti_id, record, state="save")
+                # record_response = prod_api.update_record(record.osti_id, record, state="save")
+                update_success = True
 
-        # if the update worked...
-        if update_success == True:
-            # save the record response returned with sending the update, done above
-            # convert that record response into a doi_model
-            doi_model = RecordResponse_to_doi_model(record_response)
+            except:
+                logging.debug("The update failed to save!")
+                # add the osti_id of the failed update to failed_osti_ids
+                failed_osti_ids.append(record.osti_id)
 
-            # upload that doi_model as a document to the new doi collection in mp_core
-            upload_doi_document_model_to_collection(doi_model, MongoClient, collection_name)
+            # if the update worked...
+            if update_success == True:
+                # save the record response returned with sending the update, done above
+                # convert that record response into a doi_model
+                doi_model = RecordResponse_to_doi_model(record) #change later to record response
 
-#     else if the description on Elink matches what is in the robocrys collection:
-#         convert that record into a doi_model
-#         upload that doi_model as a document to the new doi collection in mp_core, no updated needed!
+                # upload that doi_model as a document to the new doi collection in mp_core
+                # what is the collection
+                with MongoClient() as local_client:
+                    collection = local_client["dois_test"]["dois"]
+                    x = collection.insert_one(doi_model.dict(by_alias=True)).inserted_id
 
-with open(f"failed_osti_ids_{str(datetime.datetime.now())}.txt", 'w') as output: # change filepath as needed
+        # else if the description on Elink matches what is in the robocrys collection:
+        elif record.description == robocrys_description:
+            # convert that record into a doi_model
+            doi_model = RecordResponse_to_doi_model(record)
+
+            # upload that doi_model as a document to the new doi collection in mp_core, no updated needed!
+            with MongoClient() as local_client:
+                collection = local_client["dois_test"]["dois"]
+                x = collection.insert_one(doi_model).inserted_id
+
+cwd = os.getcwd()
+path = f"/files/failed_osti_ids_{str(datetime.datetime.now())}.txt"
+with open(cwd+path, 'w') as output: # change filepath as needed
     for id in failed_osti_ids:
         output.write(str(id) + '\n') # i'm pretty sure it's a string already though...
