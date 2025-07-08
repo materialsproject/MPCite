@@ -68,7 +68,7 @@ for filename in os.listdir(cwd+path):
 
             try:
                 # send update to the record with the record response # update_record(osti_id, record, state="save")
-                # record_response = prod_api.update_record(record.osti_id, record, state="save")
+                record_response = prod_api.update_record(record.osti_id, record, state="save")
                 update_success = True
 
             except:
