@@ -20,7 +20,6 @@ review_api = Elink(token = os.environ.get("elink_review_api_token"), target=revi
 
 
 print(review_api.get_single_record(2525340))
-raise
 
 atlas_user = os.environ.get("atlas_user")
 atlas_password = os.environ.get("atlas_password")
@@ -28,7 +27,7 @@ atlas_host = os.environ.get("atlas_host")
 mongo_uri = f"mongodb+srv://{atlas_user}:{atlas_password}@{atlas_host}/"
 
 cwd = os.getcwd()
-path = "/json_pages/page_number_4.0" # IT'S ONLY DOING ONE FILE RIGHT NOW LOL
+path = "/json_pages/page_number_4.0" # IT'S ONLY DOING ONE FILE RIGHT NOW
 file = open(cwd + path, "r")
 
 update_counter = 0

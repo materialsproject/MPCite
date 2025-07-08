@@ -136,14 +136,15 @@ RecordResponse(
 )
 '''
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 import datetime
 
+# TODO: change the field names to match ELINK
 class doi_model(BaseModel):
     # identifiers
-    doi: str # can be taken from ELink API
-    title: str # can be taken from ELink API
-    osti_id: str # can be taken from ELink API
+    doi: str = Field(description="") # can be taken from ELink API
+    title: str = Field(description="") # can be taken from ELink API
+    osti_id: str = Field(description="") # can be taken from ELink API
     material_id: str # can be taken from Robocrys Collection or ELink API
 
     # time stamps
@@ -152,10 +153,10 @@ class doi_model(BaseModel):
 
     # status
     elink_workflow_status: str # can be taken from ELink API
-    date_released: datetime.datetime
-    date_submitted_to_osti_first: datetime.datetime
-    date_submitted_to_osti_last: datetime.datetime 
-    date_published: datetime.datetime # labelled as publication_date in RecordResponse of ELink API
+    date_released: datetime.datetime = Field(description="")
+    date_submitted_to_osti_first: datetime.datetime = Field(description="")
+    date_submitted_to_osti_last: datetime.datetime = Field(description="")
+    date_published: datetime.datetime = Field(description="") # labelled as publication_date in RecordResponse of ELink API
 
 # hypothetically post an update or submit a new record and receive the RecordResponse
 def RecordResponse_to_doi_model(recordresponse):
