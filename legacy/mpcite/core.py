@@ -1,34 +1,37 @@
 from typing import TypeAlias
 
 from elinkapi import Elink
-from elinkapi.record import RecordResponse, Record
+from elinkapi.record import RecordResponse, Record, Organization, Person
 from pymongo import MongoClient
 
 import requests
 from elinkapi.utils import Validation
 
+from datetime import datetime
+
 OstiID: TypeAlias = int
 
 
 def find_out_of_date_doi_entries(
-    client: MongoClient,
+    rc_client: MongoClient,
+    doi_client: MongoClient,
     robocrys_db: str,
     robocrys_collection: str,
     doi_db: str,
     doi_collection: str,
 ) -> list[OstiID]:
-    robocrys = client[robocrys_db][robocrys_collection]
-    dois = client[doi_db][doi_collection]
+    robocrys = rc_client[robocrys_db][robocrys_collection]
+    dois = doi_client[doi_db][doi_collection]
 
     latest_doi = next(
         dois.aggregate(
             [
-                {"$project": {"_id": 0, "date_record_last_updated_on_Elink": 1}},
-                {"$sort": {"date_record_last_updated_on_Elink": -1}},
+                {"$project": {"_id": 0, "date_metadata_updated": 1}},
+                {"$sort": {"date_metadata_updated": -1}},
                 {"$limit": 1},
             ]
         )
-    )["date_record_last_updated_on_Elink"]
+    )["date_metadata_updated"]
 
     material_ids_to_update = list(
         map(
@@ -108,8 +111,24 @@ def delete_osti_record(
     reason: str
 ) -> RecordResponse:
     """Delete a record by its OSTI ID."""
-    response = requests.delete(f"{elinkapi.target}records/{osti_id}?reason={reason}", headers={"Authorization": f"Bearer {api.token}"})
+    response = requests.delete(f"{elinkapi.target}records/{osti_id}?reason={reason}", headers={"Authorization": f"Bearer {elinkapi.token}"})
     Validation.handle_response(response)
     return response.status_code == 204  # True if deleted successfully
 
-# TODO: make the github error thing for the weird issue with identifiers not being allocated to the sponsoring organization
+def emptyReviewAPI(reason, review_api):
+    allDeleted = True
+    for record in review_api.query_records():
+        delete_osti_record(review_api, record.osti_id, reason)
+
+def make_minimum_record_to_fully_release(
+    title, # required to make record
+    product_type = "DA", # required to make record
+    organizations = [Organization(type='RESEARCHING', name='LBNL Materials Project (LBNL-MP)'), 
+                      Organization(type='SPONSOR', name='TEST SPONSOR ORG', identifiers=[{"type": 'CN_DOE', "value": 'AC02-05CH11231'}])], # sponsor org is necessary for submission
+    persons = [Person(type='AUTHOR', last_name='Perrson')], 
+    site_ownership_code = "LBNL-MP",
+    access_limitations = ['UNL'],
+    publication_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0), # what should this be?
+    site_url = "https://next-gen.materialsproject.org/materials"
+) -> Record:
+    return Record(product_type, title, persons, site_ownership_code, access_limitations, publication_date, site_url)

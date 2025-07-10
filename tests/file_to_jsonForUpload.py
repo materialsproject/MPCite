@@ -19,8 +19,6 @@ prod_api  = Elink(token = os.environ.get("elink_api_PRODUCTION_key"))
 review_api = Elink(token = os.environ.get("elink_review_api_token"), target=review_endpoint)
 
 
-print(review_api.get_single_record(2525340))
-
 atlas_user = os.environ.get("atlas_user")
 atlas_password = os.environ.get("atlas_password")
 atlas_host = os.environ.get("atlas_host")
@@ -43,6 +41,8 @@ def emptyReviewAPI(reason):
     allDeleted = True
     for record in review_api.query_records():
         delete_record(review_api, record.osti_id, reason) 
+
+raise
 
 start = timer()
 
