@@ -1,0 +1,40 @@
+[project]
+name = "mp-cite"
+version = "0.0.1"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "The Materials Project", email = "feedback@materialsproject.org" },
+    { name = "Hugo Onghai", email = "" },
+    { name = "Tyler Mathis", email = "35553152+tsmathis@users.noreply.github.com" },
+]
+maintainers = [
+    { name = "Tyler Mathis", email = "35553152+tsmathis@users.noreply.github.com" },
+    { name = "Patrick Huck", email = "phuck@lbl.gov" },
+]
+requires-python = ">=3.11"
+dependencies = [
+    "elinkapi>=0.4.9",
+    "pydantic>=2.11.7",
+    "pymongo>=4.13.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+include=["src/mp_cite"]
+exclude=["/tests", "/legacy"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mp_cite"]
+
+[project.urls]
+Homepage = "https://github.com/materialsproject/MPCite"
+Issues = "https://github.com/materialsproject/MPCite/issues"
