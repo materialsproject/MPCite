@@ -1,7 +1,7 @@
 xmltodict==0.12.0
 urllib3==1.25.9
 dicttoxml==1.7.4
-tqdm==4.46.0
+tqdm==4.66.3
 bibtexparser==1.2.0
 monty==3.0.2
 nbformat==5.0.7
