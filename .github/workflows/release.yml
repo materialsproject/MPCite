@@ -1,0 +1,8 @@
+name: release
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+# TODO: setup release to pypi
