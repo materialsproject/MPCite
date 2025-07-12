@@ -10,7 +10,6 @@ from mp_cite.models import MinimumDARecord
 
 OstiID: TypeAlias = int
 
-
 def find_out_of_date_doi_entries(
     rc_client: MongoClient,
     doi_client: MongoClient,

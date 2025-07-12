@@ -5,6 +5,7 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+<<<<<<< HEAD
   workflow_dispatch:
 
 jobs:
@@ -21,3 +22,6 @@ jobs:
 
       - name: Analyzing the code with ruff
         run: uvx ruff check --output-format=github
+=======
+# TODO: setup linting with uv/ruff
+>>>>>>> 52382ff (Merged upstream (#1))
