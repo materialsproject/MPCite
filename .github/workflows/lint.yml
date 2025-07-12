@@ -1,0 +1,8 @@
+name: linting
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+# TODO: setup linting with uv/ruff
