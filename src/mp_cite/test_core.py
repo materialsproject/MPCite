@@ -36,7 +36,6 @@ with MongoClient(mongo_uri) as real_client:
 
         #     # make a post to the elink review environment    
         #     saved_record = review_api.post_new_record(my_record, state="submit")
-
         #     # make a doi document with saved_record
         #     doi_model = RecordResponse_to_doi_model(saved_record)
 

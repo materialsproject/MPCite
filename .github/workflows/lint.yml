@@ -6,3 +6,27 @@ on:
   pull_request:
     branches: [master]
 # TODO: setup linting with uv/ruff
+# informed by testing.yml and https://medium.com/@sidharthvijayakumar7/automating-pylint-in-github-workflow-80c84b2ff243
+jobs:
+  linting:
+    strategy:
+      matrix:
+        os: ["ubuntu-latest"]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+              python -m pip install --upgrade pip
+              pip install pylint
+              pip install pylint-fail-under
+      - name: Analyzing the code with pylint
+        run: find . -path ./legacy -prune -o -name '*.py' -print -exec pylint --output-format=github -- {} \; # run pylint on every .py file in the repository except for anything in legacy (gets pruned)
+      # Disabled error-checking related to importing and unused-imports
+      - name: Fails if pylint score is less than 6.0
+        run: |
+              for file in $(find . -path ./legacy -prune -o -name '*.py')
+              do
+                pylint --disable=E0401,W0611 "$file" --fail-under=6.0;
+              done
