@@ -1,8 +1,65 @@
 name: release
 
 on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
-# TODO: setup release to pypi
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mp-cite
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: 3.12
+
+      - name: Build
+        run: uv-build
+
+      - name: Publish
+        run: uv-publish --trusted-publishing always
+
+  docs:
+    runs-on: ubuntu-latest
+    needs:
+      - publish
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: 3.12
+
+      - name: Install deps
+        run: uv sync --locked --all-extras --dev
+
+      - name: Generate changelog
+        uses: charmixer/auto-changelog-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          exclude_labels: dependencies
+
+      - name: Commit files
+        run: |
+          git config --local user.email "feedback@materialsproject.org"
+          git config --local user.name "materialsproject"
+          git stash
+          git pull origin main
+          mv CHANGELOG.md docs/
+          git add docs/CHANGELOG.md && git commit -m 'Updated CHANGELOG.md'
+
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+# integrate mkdocs at some point
