@@ -13,6 +13,10 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         python-version: ["3.11", "3.12", "3.13"]
+
+    name: mp-cite linting (${{ matrix.os }}/py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    
     steps:
       - name: Checkout the code
         uses: actions/checkout@v2
