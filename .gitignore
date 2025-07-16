@@ -209,3 +209,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+<<<<<<< HEAD
+=======
+
+# json files for storing production records
+*.json
+.env
+/json_pages
+/notebooks
+/test_json_pages
+>>>>>>> b991f09 (New Branch for Linting Workflow)
