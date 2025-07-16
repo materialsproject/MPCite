@@ -214,3 +214,5 @@ __marimo__/
 *.json
 .env
 /json_pages
+/notebooks
+/test_json_pages
