@@ -19,5 +19,12 @@ jobs:
           python-version: "3.12"
           version: "latest"
 
+<<<<<<< HEAD
+=======
+      - name: Install ruff
+        run: |
+          uv pip install ruff
+      # Update output format to enable automatic inline annotations
+>>>>>>> 27ac04f (Using uv to install ruff dependency, using uv-cache and removing pip installation)
       - name: Analyzing the code with ruff
         run: uvx ruff check --output-format=github
