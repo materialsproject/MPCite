@@ -31,6 +31,7 @@ jobs:
           version: "latest"
 
       - name: Create virtual environment # this will allow us to install the dependencies in an isolated environment, for each python version too, which is already specified when uv is setup.
+        run: uv venv
 
       - name: Install ruff
         run: |
