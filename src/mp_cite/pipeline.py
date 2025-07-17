@@ -1,26 +1,26 @@
 import os
 import json
-from elinkapi import Elink, Record
+from elinkapi import Elink
 from elinkapi.record import RecordResponse
 from dotenv import load_dotenv
 
-import requests
-from elinkapi.utils import Validation
 
 from pymongo import MongoClient
-import pymongo
 
-from timeit import default_timer as timer
 import logging
-import datetime
-from doi_builder import *
+import requests
 
-load_dotenv() # depends on the root directory from which you run your python scripts.
+import datetime
+from doi_builder import RecordResponse_to_doi_model, doi_model
+
+load_dotenv()  # depends on the root directory from which you run your python scripts.
 
 review_endpoint = "https://review.osti.gov/elink2api/"
 
-prod_api  = Elink(token = os.environ.get("elink_api_PRODUCTION_key"))
-review_api = Elink(token = os.environ.get("elink_review_api_token"), target=review_endpoint)
+prod_api = Elink(token=os.environ.get("elink_api_PRODUCTION_key"))
+review_api = Elink(
+    token=os.environ.get("elink_review_api_token"), target=review_endpoint
+)
 
 atlas_user = os.environ.get("atlas_user")
 atlas_password = os.environ.get("atlas_password")
@@ -32,55 +32,70 @@ failed_osti_ids = []
 cwd = os.getcwd()
 path = "/json_pages/"
 
-for filename in os.listdir(cwd+path):
+for filename in os.listdir(cwd + path):
     logging.debug(f"Now extracting {filename}")
     file = open(cwd + path + filename, "r")
     for line in file:
         record = RecordResponse(**json.loads(line.strip()))
-        record.osti_id = record.doi.split('/')[1]
+        record.osti_id = record.doi.split("/")[1]
         # for every record in the OSTI production environment:
         # flag for update performance
         update_success = False
 
         material_id = record.site_unique_id
 
-        with MongoClient(mongo_uri) as client: # should I open this in or outside of the for loop?
+        with MongoClient(
+            mongo_uri
+        ) as client:  # should I open this in or outside of the for loop?
             coll = client["mp_core_blue"]["robocrys"]
-            res = coll.find_one({"material_id" : material_id})
-        
-            if res != None:
+            res = coll.find_one({"material_id": material_id})
+
+            if res is not None:
                 robocrys_description = res["description"]
-                
+
             # what if there is no document in robocrys found?
             else:
-                logging.warning(f"No robocrys document was found to match the OSTI record: {record.osti_id}!")
+                logging.warning(
+                    f"No robocrys document was found to match the OSTI record: {record.osti_id}!"
+                )
 
         # if the description of the record on Elink doesnt match what is in the robocrys collection:
-        if res != None and record.description != robocrys_description:
+        if res is not None and record.description != robocrys_description:
             # directly update the description of the record via the record response
             record.description = robocrys_description
-            
+
             # and directly update the identifier for sponsoring org
             for entry in record.organizations:
                 if entry.type == "SPONSOR":
-                    entry.identifiers = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
+                    entry.identifiers = [{"type": "CN_DOE", "value": "AC02-05CH11231"}]
                     break
 
             try:
                 # send update to the record with the record response # update_record(osti_id, record, state="save")
-                record_response = prod_api.update_record(record.osti_id, record, state="save")
+                record_response = prod_api.update_record(
+                    record.osti_id, record, state="save"
+                )
                 update_success = True
 
-            except:
-                logging.debug("The update failed to save!")
-                # add the osti_id of the failed update to failed_osti_ids
+            except requests.exceptions.RequestException as e:
+                logging.debug(f"Network or HTTP error: {e}")
+                failed_osti_ids.append(record.osti_id)
+
+            except ValueError as e:
+                logging.debug(f"Data error while updating record: {e}")
+                failed_osti_ids.append(record.osti_id)
+
+            except Exception as e:
+                logging.debug(f"Unexpected error during update: {e}")
                 failed_osti_ids.append(record.osti_id)
 
             # if the update worked...
-            if update_success == True:
+            if update_success:
                 # save the record response returned with sending the update, done above
                 # convert that record response into a doi_model
-                doi_model = RecordResponse_to_doi_model(record) #change later to record response
+                doi_model = RecordResponse_to_doi_model(
+                    record
+                )  # change later to record response
 
                 # upload that doi_model as a document to the new doi collection in mp_core
                 # what is the collection
@@ -100,6 +115,6 @@ for filename in os.listdir(cwd+path):
 
 cwd = os.getcwd()
 path = f"/files/failed_osti_ids_{str(datetime.datetime.now())}.txt"
-with open(cwd+path, 'w') as output: # change filepath as needed
+with open(cwd + path, "w") as output:  # change filepath as needed
     for id in failed_osti_ids:
-        output.write(str(id) + '\n') # i'm pretty sure it's a string already though...
+        output.write(str(id) + "\n")  # i'm pretty sure it's a string already though...

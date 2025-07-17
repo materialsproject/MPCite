@@ -18,7 +18,7 @@ jobs:
 
     name: mp-cite (${{ matrix.os }}/py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
-    
+
     steps:
       - uses: actions/checkout@v4
 

@@ -7,16 +7,17 @@ import requests
 from elinkapi.utils import Validation
 
 from pymongo import MongoClient
-import pymongo
 
 from timeit import default_timer as timer
 
-load_dotenv() # depends on the root directory from which you run your python scripts.
+load_dotenv()  # depends on the root directory from which you run your python scripts.
 
 review_endpoint = "https://review.osti.gov/elink2api/"
 
-prod_api  = Elink(token = os.environ.get("elink_api_PRODUCTION_key"))
-review_api = Elink(token = os.environ.get("elink_review_api_token"), target=review_endpoint)
+prod_api = Elink(token=os.environ.get("elink_api_PRODUCTION_key"))
+review_api = Elink(
+    token=os.environ.get("elink_review_api_token"), target=review_endpoint
+)
 
 
 atlas_user = os.environ.get("atlas_user")
@@ -25,24 +26,27 @@ atlas_host = os.environ.get("atlas_host")
 mongo_uri = f"mongodb+srv://{atlas_user}:{atlas_password}@{atlas_host}/"
 
 cwd = os.getcwd()
-path = "/json_pages/page_number_4.0" # IT'S ONLY DOING ONE FILE RIGHT NOW
+path = "/json_pages/page_number_4.0"  # IT'S ONLY DOING ONE FILE RIGHT NOW
 file = open(cwd + path, "r")
 
 update_counter = 0
 records_checked = 0
 
+
 def delete_record(api, osti_id, reason):
     """Delete a record by its OSTI ID."""
-    response = requests.delete(f"{api.target}records/{osti_id}?reason={reason}", headers={"Authorization": f"Bearer {api.token}"})
+    response = requests.delete(
+        f"{api.target}records/{osti_id}?reason={reason}",
+        headers={"Authorization": f"Bearer {api.token}"},
+    )
     Validation.handle_response(response)
     return response.status_code == 204  # True if deleted successfully
 
-def emptyReviewAPI(reason):
-    allDeleted = True
-    for record in review_api.query_records():
-        delete_record(review_api, record.osti_id, reason) 
 
-raise
+def emptyReviewAPI(reason):
+    for record in review_api.query_records():
+        delete_record(review_api, record.osti_id, reason)
+
 
 start = timer()
 
@@ -55,7 +59,7 @@ for line in file:
 
     for entry in js["organizations"]:
         if entry["type"] == "SPONSOR":
-            entry["identifiers"] = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
+            entry["identifiers"] = [{"type": "CN_DOE", "value": "AC02-05CH11231"}]
 
     material_id = js["site_unique_id"]
 
@@ -63,15 +67,23 @@ for line in file:
 
     with MongoClient(mongo_uri) as client:
         coll = client["mp_core_blue"]["robocrys"]
-        res = coll.find_one({"material_id" : material_id})
+        res = coll.find_one({"material_id": material_id})
         records_checked += 1
-        
-        if res != None:
-           robocrys_description = res["description"]
+
+        if res is not None:
+            robocrys_description = res["description"]
 
     # see if an update to the description is necessary, if it is, then update the description and post a new record.
-    if postUnedited or (robocrys_description != None and js["description"] != robocrys_description): #if a robocrys_description was found internally and it doesn't match what ELink has record...
-        js["description"] = "OLD WAS UPDATED, THEN IT WAS POSTED: " + robocrys_description
+    if (
+        postUnedited
+        or (
+            robocrys_description is not None
+            and js["description"] != robocrys_description
+        )
+    ):  # if a robocrys_description was found internally and it doesn't match what ELink has record...
+        js["description"] = (
+            "OLD WAS UPDATED, THEN IT WAS POSTED: " + robocrys_description
+        )
         my_record = Record(**js)
 
         saved_record = None
@@ -85,14 +97,18 @@ for line in file:
             print(f"NEW RECORD POSTED: {saved_record.osti_id}")
             raise
         except:
-            print(f"Record failed to post!: {my_record.doi}. Robocrys Collection Had Description {robocrys_description[0:50]}... Prod_Env ELink Had {my_record.description[37:87]}...")
+            print(
+                f"Record failed to post!: {my_record.doi}. Robocrys Collection Had Description {robocrys_description[0:50]}... Prod_Env ELink Had {my_record.description[37:87]}..."
+            )
             raise
 
     if update_counter >= 10000:
         break
 
 end = timer()
-print(f"Records Updated and/or Posted: {update_counter} \nRecords Checked in Total: {records_checked}. \nIt took {end - start} seconds")
+print(
+    f"Records Updated and/or Posted: {update_counter} \nRecords Checked in Total: {records_checked}. \nIt took {end - start} seconds"
+)
 
 #######################################################
 # JUST POST JSON, Then update posted json Later
@@ -125,7 +141,7 @@ print(f"Records Updated and/or Posted: {update_counter} \nRecords Checked in Tot
 #             coll = client["mp_core_blue"]["robocrys"]
 #             res = coll.find_one({"material_id" : material_id})
 #             records_checked += 1
-            
+
 #             if res != None:
 #                 robocrys_description = res["description"]
 

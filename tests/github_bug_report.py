@@ -5,9 +5,11 @@ from datetime import datetime
 
 load_dotenv()
 
-prod_api = Elink(token = os.environ.get("elink_api_PRODUCTION_key"))
+prod_api = Elink(token=os.environ.get("elink_api_PRODUCTION_key"))
 review_endpoint = "https://review.osti.gov/elink2api/"
-review_api = Elink(token = os.environ.get("elink_review_api_token"), target=review_endpoint)
+review_api = Elink(
+    token=os.environ.get("elink_review_api_token"), target=review_endpoint
+)
 
 # record_response = prod_api.get_single_record(1190959) # returns OSTI record response with OSTI ID = 1190959, which has a DOE Contract Number saved (AC02-05CH11231; EDCBEE)
 # record_response_dict = record_response.model_dump(exclude_none=True)
@@ -30,17 +32,27 @@ review_api = Elink(token = os.environ.get("elink_review_api_token"), target=revi
 required_fields = {
     "product_type": "DA",
     "title": "Testing if CN_DOE can be random",
-    "organizations": [Organization(type='RESEARCHING', name='LBNL Materials Project (LBNL-MP)'), 
-                      Organization(type='SPONSOR', name='TEST SPONSOR ORG', identifiers=[{"type": 'CN_DOE', "value": 'oiajdiwjdiwj'}])],
-    "persons": [Person(type='AUTHOR', last_name='Schmoe')],
+    "organizations": [
+        Organization(type="RESEARCHING", name="LBNL Materials Project (LBNL-MP)"),
+        Organization(
+            type="SPONSOR",
+            name="TEST SPONSOR ORG",
+            identifiers=[{"type": "CN_DOE", "value": "oiajdiwjdiwj"}],
+        ),
+    ],
+    "persons": [Person(type="AUTHOR", last_name="Schmoe")],
     "site_ownership_code": "LBNL-MP",
-    "access_limitations": ['UNL'],
-    "publication_date": datetime.now().replace(hour=0, minute=0, second=0, microsecond=0),
-    "site_url": "https://next-gen.materialsproject.org/materials"
+    "access_limitations": ["UNL"],
+    "publication_date": datetime.now().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ),
+    "site_url": "https://next-gen.materialsproject.org/materials",
 }
 
 empty_record = Record(**required_fields)
-print(f"SUBMITTED TO OSTI, FULLY VALIDATED:\n{review_api.get_single_record(2525614)}\n\n\nTRYING TO SUBMIT:\n{empty_record}")
+print(
+    f"SUBMITTED TO OSTI, FULLY VALIDATED:\n{review_api.get_single_record(2525614)}\n\n\nTRYING TO SUBMIT:\n{empty_record}"
+)
 
 try:
     saved_record = review_api.post_new_record(empty_record, "submit")

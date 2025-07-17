@@ -1,30 +1,29 @@
 # This script will see how many documents in ELink, i.e. ones with a DOI, are not accounted for in the internal DOI collection.
 
-from elinkapi import Elink, Query, Record
+from elinkapi import Elink, Record
 
 import os
 from dotenv import load_dotenv
 
-load_dotenv() # depends on the root directory from which you run your python scripts.
+load_dotenv()  # depends on the root directory from which you run your python scripts.
 
-api  = Elink(token = os.environ.get("elink_api_PRODUCTION_key"))
+api = Elink(token=os.environ.get("elink_api_PRODUCTION_key"))
 
 
 query1 = api.query_records(rows=1000)
 
-materials_with_dois : list[Record] = []
+materials_with_dois: list[Record] = []
 
 for page in query1:
     print(f"Now on Page: {page.title}")
     print(f"Material_ID: {page.site_unique_id} and DOI: http://doi.org/{page.doi}")
-    
+
     if page.site_unique_id.startswith("mp-"):
         materials_with_dois.append(page)
 
     # for record in page.data:
     #     if record.site_unique_id.startswith("mp-"):
     #         materials_with_dois.append(record)
-
 
 
 # set_q1 = [page for page in query1]
@@ -44,6 +43,6 @@ for page in query1:
 # for page in query1:
 #     print(page.title)
 #     print(f"Material_ID: {page.site_unique_id} and DOI: http://doi.org/{page.doi}")
-    
+
 #     for record in page.data:
 #         print (f"OSTI ID: {record.osti_id} Title: {record.title}")
