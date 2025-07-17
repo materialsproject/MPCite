@@ -1,0 +1,46 @@
+(mpcite-env) C:\Users\ongha\OneDrive\Documents\GitHub\MPCite>C:/Users/ongha/anaconda3/envs/mpcite-env/python.exe c:/Users/ongha/OneDrive/Documents/GitHub/MPCite/tests/prod_to_review.py
+<elinkapi.query.Query object at 0x000001E6CB8D0980>
+Query retrieved 144845 record(s)
+Page finished. Now at 500 data entries. 0 edge cases found.
+Page finished. Now at 1000 data entries. 0 edge cases found.
+Page finished. Now at 1500 data entries. 0 edge cases found.
+Page finished. Now at 2000 data entries. 0 edge cases found.
+Page finished. Now at 2500 data entries. 0 edge cases found.
+Page finished. Now at 3000 data entries. 0 edge cases found.
+Page finished. Now at 3500 data entries. 0 edge cases found.
+Page finished. Now at 4000 data entries. 0 edge cases found.
+Page finished. Now at 4500 data entries. 0 edge cases found.
+Page finished. Now at 5000 data entries. 0 edge cases found.
+Page finished. Now at 5500 data entries. 0 edge cases found.
+Page finished. Now at 6000 data entries. 0 edge cases found.
+Page finished. Now at 6500 data entries. 0 edge cases found.
+Page finished. Now at 7000 data entries. 0 edge cases found.
+Page finished. Now at 7500 data entries. 0 edge cases found.
+Page finished. Now at 8000 data entries. 0 edge cases found.
+Page finished. Now at 8500 data entries. 0 edge cases found.
+Page finished. Now at 9000 data entries. 0 edge cases found.
+Page finished. Now at 9500 data entries. 0 edge cases found.
+Page finished. Now at 10000 data entries. 0 edge cases found.
+Page finished. Now at 10500 data entries. 0 edge cases found.
+Page finished. Now at 11000 data entries. 0 edge cases found.
+Page finished. Now at 11500 data entries. 0 edge cases found.
+Page finished. Now at 12000 data entries. 0 edge cases found.
+Page finished. Now at 12500 data entries. 0 edge cases found.
+Page finished. Now at 13000 data entries. 0 edge cases found.
+Page finished. Now at 13500 data entries. 0 edge cases found.
+Page finished. Now at 14000 data entries. 0 edge cases found.
+Page finished. Now at 14500 data entries. 0 edge cases found.
+
+Traceback (most recent call last):
+  File "C:\Users\ongha\anaconda3\envs\mpcite-env\Lib\site-packages\elinkapi\query.py", line 95, in __next__
+    record = self.data.pop()
+IndexError: pop from empty list
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "c:\Users\ongha\OneDrive\Documents\GitHub\MPCite\tests\prod_to_review.py", line 29, in <module>
+    record = next(query)
+  File "C:\Users\ongha\anaconda3\envs\mpcite-env\Lib\site-packages\elinkapi\query.py", line 108, in __next__
+    raise StopIteration
+StopIteration
