@@ -7,7 +7,6 @@ on:
     branches: [master]
   workflow_dispatch:
 
-<<<<<<< HEAD
 jobs:
   linting:
     runs-on: ubuntu-latest
@@ -22,33 +21,3 @@ jobs:
 
       - name: Analyzing the code with ruff
         run: uvx ruff check --output-format=github
-=======
-# TODO: setup linting with uv/ruff
-# informed by testing.yml and https://medium.com/@sidharthvijayakumar7/automating-pylint-in-github-workflow-80c84b2ff243 and ruff documentation
-jobs:
-  linting:
-    strategy:
-      matrix:
-        os: ["ubuntu-latest"]
-        python-version: ["3.11", "3.12", "3.13"]
-
-    name: mp-cite (${{ matrix.os }}/py${{ matrix.python-version }})
-    runs-on: ${{ matrix.os }}
-    
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-          version: "latest"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-      # Update output format to enable automatic inline annotations
-      - name: Analyzing the code with ruff
-        run: ruff check --output-format=github
->>>>>>> 7c6a8e7 (Testing Linting workflow)
