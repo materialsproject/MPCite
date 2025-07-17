@@ -154,4 +154,8 @@ def delete_osti_record(elinkapi: Elink, osti_id: OstiID, reason: str) -> bool:
         headers={"Authorization": f"Bearer {elinkapi.token}"},
     )
     Validation.handle_response(response)
+<<<<<<< HEAD
     return response.status_code == 204  # True if deleted successfully
+=======
+    return response.status_code == 204  # True if deleted successfully
+>>>>>>> d7a7e39 (Testing pre-commit and updated lint.yml to disregard legacy files)
