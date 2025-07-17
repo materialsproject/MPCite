@@ -2,9 +2,9 @@ name: linting
 
 on:
   push:
-    branches: [master]
+    branches: [master, linting-workflow]
   pull_request:
-    branches: [master]
+    branches: [master, linting-workflow]
   workflow_dispatch:
 
 # TODO: setup linting with uv/ruff
