@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: ["ubuntu-latest"]
         python-version: ["3.11", "3.12", "3.13"]
-
+      fail-fast: false
     name: mp-cite (${{ matrix.os }}/py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
 
