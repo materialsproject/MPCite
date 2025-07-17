@@ -22,11 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install uv
+      - name: Install uv and set up the python version
         uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
           version: "latest"
+
+      - name: Create virtual environment # this will allow us to install the dependencies in an isolated environment, for each python version too, which is already specified when uv is setup.
 
       - name: Install ruff
         run: |
