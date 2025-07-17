@@ -28,10 +28,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
           version: "latest"
 
-      - name: Install dependencies
+      - name: Install ruff
         run: |
-          python -m pip install --upgrade pip
-          pip install ruff
+          uv pip install ruff
       # Update output format to enable automatic inline annotations
       - name: Analyzing the code with ruff
         run: ruff check --output-format=github
