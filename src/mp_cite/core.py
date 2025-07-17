@@ -206,12 +206,15 @@ def delete_osti_record(elinkapi: Elink, osti_id: OstiID, reason: str) -> bool:
 
 
 def delete_osti_record(
-    elinkapi: Elink,
+    elinkapi_token: str,
     osti_id: OstiID,
     reason: str
 ) -> RecordResponse:
+    review_endpoint = "https://review.osti.gov/elink2api/"
+    review_api = Elink(token = elinkapi_token, target=review_endpoint)
+
     """Delete a record by its OSTI ID."""
-    response = requests.delete(f"{elinkapi.target}records/{osti_id}?reason={reason}", headers={"Authorization": f"Bearer {elinkapi.token}"})
+    response = requests.delete(f"{review_api.target}records/{osti_id}?reason={reason}", headers={"Authorization": f"Bearer {review_api.token}"})
     Validation.handle_response(response)
     return response.status_code == 204  # True if deleted successfully
 
