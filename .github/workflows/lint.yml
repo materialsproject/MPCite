@@ -30,16 +30,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           version: "latest"
 
-      - name: Create virtual environment # this will allow us to install the dependencies in an isolated environment, for each python version too, which is already specified when uv is setup.
-        run: uv venv
-
-      - name: Install ruff
-        run: |
-          uv pip install ruff
-      # Update output format to enable automatic inline annotations
       - name: Analyzing the code with ruff
+<<<<<<< HEAD
         run: ruff check --output-format=github
 <<<<<<< HEAD
 >>>>>>> 8d7d55b (Testing Linting workflow)
 =======
 >>>>>>> 61d74c1 (Allowing Lint.YML to run on push to linting_workflow)
+=======
+        run: uvx ruff check --output-format=github
+>>>>>>> 69556e5 (Trying uvx)
