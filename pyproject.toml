@@ -81,8 +81,14 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+<<<<<<< HEAD
     "legacy"
 >>>>>>> d9ab19c (Testing pre-commit and updated lint.yml to disregard legacy files)
+=======
+    "legacy",
+    "notebooks",
+    "uv.lock"
+>>>>>>> c4d9a8f (attempting ruff check again now that is seems to work...)
 ]
 
 # Same as Black.
