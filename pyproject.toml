@@ -68,7 +68,9 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
-    "legacy"
+    "legacy",
+    "notebooks",
+    "uv.lock"
 ]
 
 # Same as Black.
