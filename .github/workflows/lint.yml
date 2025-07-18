@@ -28,12 +28,5 @@ jobs:
           python-version: ${{ matrix.python-version }}
           version: "latest"
 
-      - name: Create virtual environment # this will allow us to install the dependencies in an isolated environment, for each python version too, which is already specified when uv is setup.
-        run: uv venv
-
-      - name: Install ruff
-        run: |
-          uv pip install ruff
-      # Update output format to enable automatic inline annotations
       - name: Analyzing the code with ruff
-        run: ruff check --output-format=github
+        run: uvx ruff check --output-format=github
