@@ -50,57 +50,15 @@ Issues = "https://github.com/materialsproject/MPCite/issues"
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
-<<<<<<< HEAD
     "legacy",
     "notebooks",
     "uv.lock"
-=======
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".ipynb_checkpoints",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pyenv",
-    ".pytest_cache",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    ".vscode",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "site-packages",
-    "venv",
-<<<<<<< HEAD
-    "legacy"
->>>>>>> d9ab19c (Testing pre-commit and updated lint.yml to disregard legacy files)
-=======
-    "legacy",
-    "notebooks",
-    "uv.lock"
->>>>>>> c4d9a8f (attempting ruff check again now that is seems to work...)
 ]
 
 # Same as Black.
 line-length = 88
 indent-width = 4
 
-<<<<<<< HEAD
-=======
-# Assume Python 3.9
-target-version = "py39"
-
->>>>>>> d9ab19c (Testing pre-commit and updated lint.yml to disregard legacy files)
 [tool.ruff.lint]
 # Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
@@ -112,13 +70,8 @@ ignore = []
 fixable = ["ALL"]
 unfixable = []
 
-<<<<<<< HEAD
 # Allow NO unused variables to exist in the codebase. If underscore-prefixed unused variables are permissible, use this regex $^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 dummy-variable-rgx = "^$"
-=======
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
->>>>>>> d9ab19c (Testing pre-commit and updated lint.yml to disregard legacy files)
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
