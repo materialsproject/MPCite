@@ -4,9 +4,14 @@ import requests
 from elinkapi import Elink
 from elinkapi.record import RecordResponse
 from elinkapi.utils import Validation
+<<<<<<< HEAD
 from pymongo import MongoClient
 
 from mp_cite.models import MinimumDARecord
+=======
+from mp_cite.models import MinimumDARecord
+from typing import Literal, TypeAlias
+>>>>>>> 5abbf4b (Attempting first run of testing suite with github actions)
 
 OstiID: TypeAlias = int
 
@@ -155,7 +160,11 @@ def delete_osti_record(elinkapi: Elink, osti_id: OstiID, reason: str) -> bool:
     )
     Validation.handle_response(response)
 <<<<<<< HEAD
+<<<<<<< HEAD
     return response.status_code == 204  # True if deleted successfully
 =======
     return response.status_code == 204  # True if deleted successfully
 >>>>>>> d7a7e39 (Testing pre-commit and updated lint.yml to disregard legacy files)
+=======
+    return response.status_code == 204  # True if deleted successfully
+>>>>>>> 5abbf4b (Attempting first run of testing suite with github actions)
