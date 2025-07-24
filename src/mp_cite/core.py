@@ -3,7 +3,7 @@ from elinkapi.record import RecordResponse
 from pymongo import MongoClient
 import requests
 from elinkapi.utils import Validation
-from mp_cite.doi_builder import MinimumDARecord
+from mp_cite.models import MinimumDARecord
 from typing import Literal, TypeAlias
 
 OstiID: TypeAlias = int
