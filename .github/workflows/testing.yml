@@ -29,10 +29,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install the project
-        run: |
-              uv sync --locked --all-extras --dev
-              uv pip install python-dotenv
+        run: uv sync --locked --all-extras --dev
 
+      - name: Verify installed packages
+        run: uv pip list
 
       - name: Run tests
         env:
