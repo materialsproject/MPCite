@@ -15,8 +15,10 @@ maintainers = [
 requires-python = ">=3.11"
 dependencies = [
     "elinkapi>=0.4.9",
+    "pre-commit>=4.2.0",
     "pydantic>=2.11.7",
     "pymongo>=4.13.2",
+    "ruff>=0.12.7",
 ]
 
 [dependency-groups]

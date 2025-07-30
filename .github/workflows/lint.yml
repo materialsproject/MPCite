@@ -28,5 +28,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
           version: "latest"
 
+      - name: Install ruff
+        run: uv add ruff
+
       - name: Analyzing the code with ruff
         run: uvx ruff check --output-format=github
