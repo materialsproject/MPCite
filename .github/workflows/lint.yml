@@ -32,4 +32,5 @@ jobs:
         run: uv add ruff
 
       - name: Analyzing the code with ruff
-        run: uvx ruff check --output-format=github
+        run: | 
+            uvx ruff check --output-format=github --verbose
