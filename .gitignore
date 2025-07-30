@@ -296,9 +296,16 @@ __marimo__/
 *.json
 .env
 <<<<<<< HEAD
+<<<<<<< HEAD
 /json_pages
 /notebooks
 /test_json_pages
 =======
 /json_pages
 >>>>>>> 9359e8d ((after rebase) updated gitignore and moved linting to new branch)
+=======
+/json_pages
+
+/test_json_pages
+/notebooks
+>>>>>>> 5830467 (Remove accidentally committed files)
