@@ -81,6 +81,7 @@ jobs:
 
       - name: Build and Deploy!
         run: |
+          git fetch origin gh-pages
           git checkout gh-pages && git pull
           uvx mkdocs gh-deploy
 
