@@ -37,7 +37,7 @@ jobs:
         env:
           TESTPYPI_TOKEN_SCOPED_MPCITE: ${{ secrets.TESTPYPI_TOKEN_SCOPED_MPCITE }}
         run: |
-          echo Temporary Placeholder For Publish
+          echo Temporary Placeholder For Publish. Branch: ${GITHUB_REF##*/}
           # uv publish --index "testpypi" --token 
 
   docs:
@@ -67,7 +67,7 @@ jobs:
           git config --local user.email "feedback@materialsproject.org"
           git config --local user.name "materialsproject"
           git stash
-          git pull origin main
+          git pull origin ${GITHUB_REF##*/}
           mv CHANGELOG.md docs/
           git add docs/CHANGELOG.md && git commit -m 'Updated CHANGELOG.md'
 
