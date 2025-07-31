@@ -36,7 +36,9 @@ jobs:
       - name: Publish to TestPyPI
         env:
           TESTPYPI_TOKEN_SCOPED_MPCITE: ${{ secrets.TESTPYPI_TOKEN_SCOPED_MPCITE }}
-        run: # uv publish --index "testpypi" --token 
+        run: |
+          echo Temporary Placeholder For Publish
+          # uv publish --index "testpypi" --token 
 
   docs:
     runs-on: ubuntu-latest
@@ -73,4 +75,13 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        run: mkdocs build
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
 # integrate mkdocs at some point and testpypi
