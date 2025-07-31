@@ -45,7 +45,13 @@ jobs:
           python-version: 3.12
 
       - name: Install deps
+<<<<<<< HEAD
         run: uv sync --locked --all-extras --dev
+=======
+        run: |
+            uv sync --locked --all-extras --dev
+            uv pip list
+>>>>>>> 296d17b (Trying uvx to run mkdocs build, swapped order of syc and pip list)
 
       - name: Generate changelog
         uses: charmixer/auto-changelog-action@v1
@@ -68,5 +74,17 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: master
 
+<<<<<<< HEAD
       - name: Build and Deploy!
         run: uvx mkdocs gh-deploy
+=======
+      - name: Build
+        run: uvx mkdocs build
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4.0.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+# integrate mkdocs at some point and testpypi
+>>>>>>> 296d17b (Trying uvx to run mkdocs build, swapped order of syc and pip list)
