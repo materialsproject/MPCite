@@ -8,8 +8,8 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     environment:
-      name: pypi
-      url: https://pypi.org/p/mp-cite
+      name: testpypi
+      url: https://test.pypi.org/project/mp-cite/
     permissions:
       id-token: write
 
