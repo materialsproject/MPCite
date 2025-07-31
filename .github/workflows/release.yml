@@ -83,6 +83,7 @@ jobs:
         run: |
           git fetch origin gh-pages
           git checkout gh-pages && git pull
+          git checkout ${{ github.ref }}
           uvx mkdocs gh-deploy
 
 #       - name: Deploy
