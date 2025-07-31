@@ -79,12 +79,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ github.ref }}
 
-      - name: Build
-        run: uvx mkdocs build
+      - name: Build and Deploy!
+        run: uvx mkdocs gh-deploy
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v4.0.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-# integrate mkdocs at some point and testpypi
+#       - name: Deploy
+#         uses: peaceiris/actions-gh-pages@v4.0.0
+#         with:
+#           github_token: ${{ secrets.GITHUB_TOKEN }}
+#           publish_dir: ./site
+# # integrate mkdocs at some point and testpypi
