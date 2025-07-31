@@ -15,6 +15,7 @@ maintainers = [
 requires-python = ">=3.11"
 dependencies = [
     "elinkapi>=0.4.9",
+    "mkdocs>=1.6.1",
     "pydantic>=2.11.7",
     "pymongo>=4.13.2",
 ]
