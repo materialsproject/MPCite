@@ -70,11 +70,12 @@ jobs:
           git pull origin ${GITHUB_REF##*/}
           mv CHANGELOG.md docs/
           git add docs/CHANGELOG.md && git commit -m 'Updated CHANGELOG.md'
-
+          
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
 
       - name: Build
         run: mkdocs build
