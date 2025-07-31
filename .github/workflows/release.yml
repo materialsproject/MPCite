@@ -61,7 +61,11 @@ jobs:
           git stash
           git pull origin master
           mv CHANGELOG.md docs/
+<<<<<<< HEAD
           git add docs/CHANGELOG.md && git commit -m 'Updated CHANGELOG.md'
+=======
+          git add docs/CHANGELOG.md && git diff-index --quiet HEAD || git commit -m 'Updated CHANGELOG.md'
+>>>>>>> 44e82a1 (Added error error detection of nothing to commit, for development I guess)
 
       - name: Push changes
         uses: ad-m/github-push-action@master
