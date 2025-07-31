@@ -55,8 +55,8 @@ jobs:
 
       - name: Install deps
         run: |
-            uv pip list
             uv sync --locked --all-extras --dev
+            uv pip list
 
       - name: Generate changelog
         uses: charmixer/auto-changelog-action@v1
@@ -80,7 +80,7 @@ jobs:
           branch: ${{ github.ref }}
 
       - name: Build
-        run: mkdocs build
+        run: uvx mkdocs build
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4.0.0
