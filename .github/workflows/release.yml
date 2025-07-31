@@ -1,6 +1,8 @@
 name: release
 
 on:
+  push:
+      branches: [release-workflow]
   release:
     types: [published]
 
@@ -20,12 +22,21 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: 3.12
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Build
-        run: uv-build
+      - name: Install build dependencies
+        run: uv sync --all-extras
 
-      - name: Publish
-        run: uv-publish --trusted-publishing always
+      # should I uv version --bump patch here?
+
+      - name: Build the project
+        run: uv build
+
+      - name: Publish to TestPyPI
+        env:
+          TESTPYPI_TOKEN_SCOPED_MPCITE: ${{ secrets.TESTPYPI_TOKEN_SCOPED_MPCITE }}
+        run: # uv publish --index "testpypi" --token 
 
   docs:
     runs-on: ubuntu-latest
