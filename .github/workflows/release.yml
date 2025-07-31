@@ -1,8 +1,8 @@
 name: release
 
 on:
-  push:
-      branches: [release-workflow]
+  # push:
+  #     branches: [release-workflow]
   release:
     types: [published]
 
