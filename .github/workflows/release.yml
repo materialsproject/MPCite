@@ -37,7 +37,7 @@ jobs:
         env:
           TESTPYPI_TOKEN_SCOPED_MPCITE: ${{ secrets.TESTPYPI_TOKEN_SCOPED_MPCITE }}
         run: |
-          uv publish --index "testpypi" --token 
+          uv publish --index "testpypi" --token $TESTPYPI_TOKEN_SCOPED_MPCITE
           # echo Temporary Placeholder For Publish. Branch: ${GITHUB_REF##*/}
 
   docs:
