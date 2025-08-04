@@ -1,5 +1,4 @@
 site_name: MPCite
 nav:
   - Home: index.md
-  - About: about.md
   - Changelog: CHANGELOG.md
