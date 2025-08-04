@@ -5,15 +5,19 @@ on:
     branches: [release-workflow]
   workflow_dispatch:
     inputs:
-      buildSiteOnly:
-        type: boolean
-        description: If true, then the package will not publish, only the site will rebuild. If false, then the workflow will attempt to publish (it will fail if you haven't bumped the version number)
+      control:
+        type: choice
+        options:
+          - buildSiteOnly
+          - publishAndBuild
+        required: true
+        description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
   release:
     types: [published]
 
 jobs:
   publish:
-    if: ${{ github.event.inputs.buildSiteOnly == 'false'}}
+    if: ${{ github.event.inputs.control == 'publishAndBuild'}}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
