@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    if: ${{ github.event.inputs.control == 'publishAndBuild'}}
+    if: github.event_name != 'workflow_dispatch' || ${{ github.event.inputs.control == 'publishAndBuild'}}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
