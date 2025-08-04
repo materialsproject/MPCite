@@ -15,7 +15,6 @@ maintainers = [
 requires-python = ">=3.11"
 dependencies = [
     "elinkapi>=0.4.9",
-    "pre-commit>=4.2.0",
     "pydantic>=2.11.7",
     "pymongo>=4.13.2",
     "ruff>=0.12.7",
@@ -24,6 +23,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "pre-commit>=4.2.0",
 ]
 
 [build-system]
@@ -44,32 +44,6 @@ Issues = "https://github.com/materialsproject/MPCite/issues"
 [tool.ruff]
 # Exclude a variety of commonly ignored directories.
 exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".ipynb_checkpoints",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pyenv",
-    ".pytest_cache",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    ".vscode",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "site-packages",
-    "venv",
     "legacy",
     "notebooks",
     "uv.lock"
@@ -90,8 +64,8 @@ ignore = []
 fixable = ["ALL"]
 unfixable = []
 
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+# Allow NO unused variables to exist in the codebase. If underscore-prefixed unused variables are permissible, use this regex $^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+dummy-variable-rgx = "^$"
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
