@@ -6,6 +6,7 @@ on:
 
 jobs:
   publish:
+    if: ${{ github.event.inputs.buildSiteOnly == 'false'}}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
