@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 authors = [
     { name = "The Materials Project", email = "feedback@materialsproject.org" },
-    { name = "Hugo Onghai", email = "hugoonghai@g.ucla.edu" },
+    { name = "Hugo Onghai", email = "" },
     { name = "Tyler Mathis", email = "35553152+tsmathis@users.noreply.github.com" },
 ]
 maintainers = [
@@ -15,8 +15,10 @@ maintainers = [
 requires-python = ">=3.11"
 dependencies = [
     "elinkapi>=0.4.9",
+    "pre-commit>=4.2.0",
     "pydantic>=2.11.7",
     "pymongo>=4.13.2",
+    "ruff>=0.12.7",
 ]
 
 [dependency-groups]
