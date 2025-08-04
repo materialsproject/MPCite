@@ -1,0 +1,8 @@
+# About
+
+MPCite provides high-throughput, orchestrated functions for the Materials Project to interact programmatically with the DOE Office of Scientific and Technical Information (OSTI) via the E-Link API [[1]](https://github.com/doecode/elinkapi). It enables automated submission, validation, and management of metadata records and Digital Object Identifiers (DOIs) for materials data within the Materials Project ecosystem.
+
+Designed as a backend utility, MPCite ensures robust, scalable DOI assignment workflows through modular and reusable interfaces that integrate directly with MP's data infrastructure.
+
+- 📄 **Source Code:** https://github.com/materialsproject/MPCite
+- 📦 **TestPyPI Package:** https://test.pypi.org/project/mp-cite/
