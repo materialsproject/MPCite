@@ -12,8 +12,6 @@ on:
           - publishAndBuild
         required: true
         description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
-        environment:
-        type: environment
   release:
     types: [published]
 
