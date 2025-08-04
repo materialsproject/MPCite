@@ -1,6 +1,6 @@
-# Welcome to MPCite
+# Home
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+For the source code visit the [GitHub Repository](https://github.com/materialsproject/MPCite).
 
 ## Commands
 
@@ -10,8 +10,49 @@ For full documentation visit [mkdocs.org](https://www.mkdocs.org).
 * `mkdocs -h` - Print help message and exit.
 
 ## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+```
+    C:.
+    ├───.github
+    │   └───workflows
+    ├───.ipynb_checkpoints
+    ├───.pytest_cache
+    │   └───v
+    │       └───cache
+    ├───.ruff_cache
+    │   ├───0.12.4
+    │   └───0.12.7
+    ├───.venv
+    │   └───Scripts
+    ├───.vscode
+    ├───dist
+    ├───docs
+    │   └───img
+    ├───json_pages
+    │   └───.ipynb_checkpoints
+    ├───legacy
+    │   ├───files
+    │   ├───mpcite
+    │   │   └───__pycache__
+    │   └───tests
+    │       └───__pycache__
+    ├───mpcite
+    │   └───__pycache__
+    ├───notebooks
+    │   └───.ipynb_checkpoints
+    ├───site
+    │   ├───about
+    │   ├───CHANGELOG
+    │   ├───css
+    │   ├───img
+    │   ├───js
+    │   ├───search
+    │   └───webfonts
+    ├───src
+    │   └───mp_cite
+    │       ├───.ipynb_checkpoints
+    │       └───__pycache__
+    ├───tests
+    │   └───__pycache__
+    └───test_json_pages
+        └───.ipynb_checkpoints
+```
