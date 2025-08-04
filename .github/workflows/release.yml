@@ -3,15 +3,17 @@ name: release
 on:
   push:
     branches: [release-workflow]
+  
   workflow_dispatch:
     inputs:
       control:
+        required: true
+        description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
         type: choice
         options:
           - buildSiteOnly
           - publishAndBuild
-        required: true
-        description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
+  
   release:
     types: [published]
 
