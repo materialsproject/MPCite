@@ -1,30 +1,15 @@
 name: release
 
 on:
-  push:
-    branches: [release-workflow]
-  
-  workflow_dispatch:
-    inputs:
-      control:
-        required: true
-        description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
-        type: choice
-        default: "release-workflow"
-        options:
-          - buildSiteOnly
-          - publishAndBuild
-  
   release:
     types: [published]
 
 jobs:
   publish:
-    if: github.event_name != 'workflow_dispatch' || ${{ github.event.inputs.control == 'publishAndBuild'}}
     runs-on: ubuntu-latest
     environment:
-      name: testpypi
-      url: https://test.pypi.org/project/mp-cite/
+      name: pypi
+      url: https://pypi.org/p/mp-cite
     permissions:
       id-token: write
 
@@ -38,20 +23,13 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Install build dependencies
-        run: uv sync --all-extras
-
       # should I uv version --bump patch here?
 
       - name: Build the project
         run: uv build
 
-      - name: Publish to TestPyPI
-        env:
-          TESTPYPI_TOKEN_SCOPED_MPCITE: ${{ secrets.TESTPYPI_TOKEN_SCOPED_MPCITE }}
-        run: |
-          uv publish --index "testpypi" --token $TESTPYPI_TOKEN_SCOPED_MPCITE
-          # echo Temporary Placeholder For Publish. Branch: ${GITHUB_REF##*/}
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always
 
   docs:
     runs-on: ubuntu-latest
@@ -81,19 +59,15 @@ jobs:
           git config --local user.email "feedback@materialsproject.org"
           git config --local user.name "materialsproject"
           git stash
-          git pull origin ${GITHUB_REF##*/}
+          git pull origin master
           mv CHANGELOG.md docs/
-          git add docs/CHANGELOG.md && git diff-index --quiet HEAD || git commit -m 'Updated CHANGELOG.md'
+          git add docs/CHANGELOG.md && git commit -m 'Updated CHANGELOG.md'
 
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref }}
+          branch: master
 
       - name: Build and Deploy!
-        run: |
-          git fetch origin gh-pages
-          git checkout gh-pages && git pull
-          git checkout ${{ github.ref }}
-          uvx mkdocs gh-deploy
+        run: uvx mkdocs gh-deploy
