@@ -1,13 +1,17 @@
 name: release
 
 on:
-  # push:
-  #     branches: [release-workflow]
+  workflow_dispatch:
+    inputs:
+      buildSiteOnly:
+        type: boolean
+        description: If true, then the package will not publish, only the site will rebuild. If false, then the workflow will attempt to publish (it will fail if you haven't bumped the version number)
   release:
     types: [published]
 
 jobs:
   publish:
+    if: ${{ github.event.inputs.buildSiteOnly == 'false'}}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -56,7 +60,6 @@ jobs:
       - name: Install deps
         run: |
             uv sync --locked --all-extras --dev
-            uv pip list
 
       - name: Generate changelog
         uses: charmixer/auto-changelog-action@v1
@@ -81,9 +84,9 @@ jobs:
 
       - name: Build and Deploy!
         run: |
-          git fetch origin gh-pages
-          git checkout gh-pages && git pull
-          git checkout ${{ github.ref }}
+          # git fetch origin gh-pages
+          # git checkout gh-pages && git pull
+          # git checkout ${{ github.ref }}
           uvx mkdocs gh-deploy
 
 #       - name: Deploy
