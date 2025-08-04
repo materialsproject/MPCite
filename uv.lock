@@ -301,7 +301,6 @@ version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "elinkapi" },
-    { name = "mkdocs" },
     { name = "pydantic" },
     { name = "pymongo" },
 ]
@@ -311,6 +310,9 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
 ]
+docs = [
+    { name = "mkdocs" },
+]
 lint = [
     { name = "mypy" },
     { name = "ruff" },
@@ -319,7 +321,6 @@ lint = [
 [package.metadata]
 requires-dist = [
     { name = "elinkapi", specifier = ">=0.4.9" },
-    { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pymongo", specifier = ">=4.13.2" },
 ]
@@ -329,6 +330,7 @@ dev = [
     { name = "pre-commit", specifier = ">=4.2.0" },
     { name = "pytest", specifier = ">=8.4.1" },
 ]
+docs = [{ name = "mkdocs", specifier = ">=1.6.1" }]
 lint = [
     { name = "mypy", specifier = ">=1.17.1" },
     { name = "ruff", specifier = ">=0.12.7" },
