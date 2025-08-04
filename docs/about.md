@@ -5,4 +5,4 @@ MPCite provides high-throughput, orchestrated functions for the Materials Projec
 Designed as a backend utility, MPCite ensures robust, scalable DOI assignment workflows through modular and reusable interfaces that integrate directly with MP's data infrastructure.
 
 - 📄 **Source Code:** https://github.com/materialsproject/MPCite
-- 📦 **TestPyPI Package:** https://test.pypi.org/project/mp-cite/
+- 📦 **PyPI Package:** https://pypi.org/p/mp-cite/
