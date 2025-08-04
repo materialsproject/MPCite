@@ -10,6 +10,7 @@ on:
         required: true
         description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
         type: choice
+        default: "release-workflow"
         options:
           - buildSiteOnly
           - publishAndBuild
@@ -92,11 +93,7 @@ jobs:
 
       - name: Build and Deploy!
         run: |
+          git fetch origin gh-pages
+          git checkout gh-pages && git pull
+          git checkout ${{ github.ref }}
           uvx mkdocs gh-deploy
-
-#       - name: Deploy
-#         uses: peaceiris/actions-gh-pages@v4.0.0
-#         with:
-#           github_token: ${{ secrets.GITHUB_TOKEN }}
-#           publish_dir: ./site
-# # integrate mkdocs at some point and testpypi
