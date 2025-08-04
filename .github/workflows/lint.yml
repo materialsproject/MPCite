@@ -2,7 +2,7 @@ name: linting
 
 on:
   push:
-    branches: [master, linting-workflow]
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:
