@@ -6,7 +6,7 @@ on:
 
 jobs:
   publish:
-    if: ${{ github.event.inputs.buildSiteOnly == 'false'}}
+    if: ${{ github.event.inputs.control == 'publishAndBuild'}}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
