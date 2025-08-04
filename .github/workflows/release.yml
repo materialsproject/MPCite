@@ -12,12 +12,14 @@ on:
           - publishAndBuild
         required: true
         description: if buildSiteOnly, then only builds site. If publishAndBuild is selected, then publish to TestPyPi and Build.
+        environment:
+        type: environment
   release:
     types: [published]
 
 jobs:
   publish:
-    if: ${{ github.event.inputs.control == 'publishAndBuild'}}
+    if: github.event_name != 'workflow_dispatch' || ${{ github.event.inputs.control == 'publishAndBuild'}}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
