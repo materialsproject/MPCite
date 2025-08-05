@@ -20,12 +20,16 @@ jobs:
         uses: astral-sh/setup-uv@v6
         with:
           python-version: 3.12
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Build
-        run: uv-build
+      # should I uv version --bump patch here?
 
-      - name: Publish
-        run: uv-publish --trusted-publishing always
+      - name: Build the project
+        run: uv build
+
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always
 
   docs:
     runs-on: ubuntu-latest
@@ -54,7 +58,7 @@ jobs:
           git config --local user.email "feedback@materialsproject.org"
           git config --local user.name "materialsproject"
           git stash
-          git pull origin main
+          git pull origin master
           mv CHANGELOG.md docs/
           git add docs/CHANGELOG.md && git commit -m 'Updated CHANGELOG.md'
 
@@ -62,4 +66,7 @@ jobs:
         uses: ad-m/github-push-action@master
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-# integrate mkdocs at some point
+          branch: master
+
+      - name: Build and Deploy!
+        run: uvx mkdocs gh-deploy
