@@ -1,9 +1,16 @@
 import pytest
 from elinkapi import Elink, Record, exceptions
+
+import sys
 import os
-from src.mp_cite.core import make_minimum_record_to_fully_release
+
 from dotenv import load_dotenv
 from datetime import datetime
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.mp_cite.core import (
+    make_minimum_record_to_fully_release,
+)  # cannot find a good workaround for this...
 
 load_dotenv()
 
