@@ -1,7 +1,6 @@
 name: release
 
 on:
-<<<<<<< HEAD
   release:
     types: [published]
 
@@ -71,10 +70,3 @@ jobs:
 
       - name: Build and Deploy!
         run: uvx mkdocs gh-deploy
-=======
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
-# TODO: setup release to pypi
->>>>>>> 52382ff (Merged upstream (#1))
