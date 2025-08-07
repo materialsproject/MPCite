@@ -3,10 +3,11 @@ from elinkapi.record import RecordResponse
 from pymongo import MongoClient
 import requests
 from elinkapi.utils import Validation
-from mp_cite.models import MinimumDARecord
+from models import MinimumDARecord
 from typing import Literal, TypeAlias
 
 OstiID: TypeAlias = int
+
 
 def find_out_of_date_doi_entries(
     rc_client: MongoClient,
