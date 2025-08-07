@@ -1,4 +1,5 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+from typing import Any
 from datetime import datetime
 
 
@@ -10,11 +11,12 @@ class DOIModel(BaseModel):
     title: str = Field(
         description="The title of the record"
     )  # can be taken from ELink API
-    osti_id: str = Field(
+    osti_id: int = Field(
         coerce_numbers_to_str=True,
         description="The OSTI ID number allocated by OSTI to make the DOI number",
     )  # can be taken from ELink API
     material_id: str  # can be taken from Robocrys Collection or ELink API
+    site_unique_id: str  # added for compatability with E-Link's record model but in practice will match material_id
 
     # time stamps
     date_metadata_added: datetime | None = Field(
@@ -37,24 +39,16 @@ class DOIModel(BaseModel):
         description=""
     )  # labelled as publication_date in RecordResponse of ELink API
 
+    @model_validator(mode="before")
+    def set_material_id(cls, values: dict[str, Any]):
+        """
+        set_material_id will take the values passed into the model constructor before full instantiation of the object and pydantic parcing
+        and make it that the whatever is passed in for the unique_site_id will match whatever is passed in for material_id
 
-# hypothetically post an update or submit a new record and receive the RecordResponse
-def record_response_to_DOI_model(recordresponse):
-    """
-    turns a recordresponse, which is returned from a save, submission, post, etc. into a doi_model object
-    """
-    params = {
-        "doi": recordresponse.doi,
-        "title": recordresponse.title,
-        "osti_id": str(recordresponse.osti_id),
-        "material_id": recordresponse.site_unique_id,
-        "date_metadata_added": recordresponse.date_metadata_added,
-        "date_metadata_updated": recordresponse.date_metadata_updated,
-        "workflow_status": recordresponse.workflow_status,
-        "date_released": recordresponse.date_released,
-        "date_submitted_to_osti_first": recordresponse.date_submitted_to_osti_first,  # date record was first submitted to OSTI for publication, maintained internally by E-Link
-        "date_submitted_to_osti_last": recordresponse.date_submitted_to_osti_last,  # most recent date record information was submitted to OSTI. Maintained internally by E-Link.
-        "publication_date": recordresponse.publication_date,
-    }
+        :cls to designate it as a class method
+        :values are the values passed into the constructor (contain the "raw input")
 
-    return DOIModel(**params)
+        returns the values so that instantiation can proceed.
+        """
+        values["material_id"] = values["site_unique_id"]
+        return values

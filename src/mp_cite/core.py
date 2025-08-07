@@ -78,19 +78,25 @@ def update_existing_osti_record(
     :elinkapi is the instance of the elinkapi associated with the environment in which the record is held (e.g. either production or review environment)
     :osti_id is the osti id of the record which ought to be updated
     :new_values is a dictionary of keywords (which should exist in ELink's record model) and new value pairs.
+
+    N.B., it is currently assumed that the user will handle the "sponsor identifier bug"
+    --- in which the retreived record responses of validated records from the E-Link production environment seemingly
+    lack the required Sponsor Organization identifiers which were necessary for their submission (due to rearrangement of metadata
+    on E-Link's side) --- before calling this function.
+
+    Otherwise, the following code excerpt would need to be added to retroactively fix the issue with the sponsor organization's identifiers
+    for entry in record.organizations:
+        if entry.type == "SPONSOR":
+            entry.identifiers = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
+            break
+
+    Instead, we leave this for the user.
     """
 
     record_on_elink = elinkapi.get_single_record(osti_id)
 
     for keyword in new_values:
         setattr(record_on_elink, keyword, new_values[keyword])
-
-    # assume the use with fix the sponsor identifier bug before calling the update function
-    # # fix the issue with the sponsor organization's identifiers
-    # for entry in record_on_elink.organizations:
-    #     if entry.type == "SPONSOR":
-    #         entry.identifiers = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
-    #         break
 
     return elinkapi.update_record(
         osti_id, record_on_elink, state="save"
@@ -135,13 +141,6 @@ def update_state_of_osti_record(
 
     returns the record response after updating the state.
     """
-
-    # assuming that the user will handle the sponsor identifier bug before calling this function
-    # # fix the issue with the sponsor organization's identifiers
-    # for entry in record.organizations:
-    #     if entry.type == "SPONSOR":
-    #         entry.identifiers = [{"type": 'CN_DOE', "value": 'AC02-05CH11231'}]
-    #         break
 
     return elinkapi.update_record(osti_id, record, new_state)
 
