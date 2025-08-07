@@ -7,17 +7,16 @@ on:
     branches: [master]
   workflow_dispatch:
 
-# TODO: setup linting with uv/ruff
-# informed by testing.yml and https://medium.com/@sidharthvijayakumar7/automating-pylint-in-github-workflow-80c84b2ff243 and ruff documentation
 jobs:
   linting:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv and set up the python version
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
           version: "latest"
 
       - name: Analyzing the code with ruff
