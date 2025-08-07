@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from typing import Literal, TypeAlias
 
 import requests
@@ -7,6 +8,21 @@ from elinkapi.utils import Validation
 from pymongo import MongoClient
 
 from mp_cite.models import MinimumDARecord
+=======
+from typing import TypeAlias
+
+from elinkapi import Elink
+from elinkapi.record import RecordResponse
+from pymongo import MongoClient
+
+import requests
+from elinkapi.utils import Validation
+
+
+from models import MinimumDARecord
+
+from typing import Literal
+>>>>>>> 0346ff4 (Removed extra files in tests/ and updated email on pyproject.toml)
 
 OstiID: TypeAlias = int
 
