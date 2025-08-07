@@ -1,10 +1,16 @@
+from typing import TypeAlias
+
 from elinkapi import Elink
 from elinkapi.record import RecordResponse
 from pymongo import MongoClient
+
 import requests
 from elinkapi.utils import Validation
+
+
 from models import MinimumDARecord
-from typing import Literal, TypeAlias
+
+from typing import Literal
 
 OstiID: TypeAlias = int
 
