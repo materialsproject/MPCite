@@ -19,7 +19,7 @@ import requests
 from elinkapi.utils import Validation
 
 
-from models import MinimumDARecord
+from .models import MinimumDARecord
 
 from typing import Literal
 >>>>>>> 0346ff4 (Removed extra files in tests/ and updated email on pyproject.toml)
@@ -81,7 +81,10 @@ def find_out_of_date_doi_entries(
 
 
 def update_existing_osti_record(
-    elinkapi: Elink, osti_id: OstiID, new_values: dict
+    elinkapi: Elink,
+    osti_id: OstiID,
+    new_values: dict,
+    new_state: Literal["save", "submit"],
 ) -> RecordResponse:
     """
     update_existing_osti_record allows users to provide a dictionary of keywords and new values, which will replace the old values under the same keywords in the record with the given osti id
@@ -104,14 +107,16 @@ def update_existing_osti_record(
     Instead, we leave this for the user.
     """
 
-    record_on_elink = elinkapi.get_single_record(osti_id)
+    # record_on_elink = elinkapi.get_single_record(osti_id)
 
-    for keyword in new_values:
-        setattr(record_on_elink, keyword, new_values[keyword])
+    # for keyword in new_values:
+    #     setattr(record_on_elink, keyword, new_values[keyword])
 
-    return elinkapi.update_record(
-        osti_id, record_on_elink, state="save"
-    )  # user should use update_state_of_osti_record to submit instead
+    # return elinkapi.update_record(
+    #     osti_id, record_on_elink, state="save"
+    # )  # user should use update_state_of_osti_record to submit instead
+
+    elinkapi.patch_record(osti_id, new_values, new_state)
 
 
 def submit_new_osti_record(

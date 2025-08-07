@@ -1,5 +1,6 @@
 import pytest
 from elinkapi import Elink, Record, exceptions
+from elinkapi.record import RecordResponse
 
 import sys
 import os
@@ -8,9 +9,9 @@ from dotenv import load_dotenv
 from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from src.mp_cite.core import (
-    make_minimum_record_to_fully_release,
-)  # cannot find a good workaround for this...
+from src.mp_cite.models import (
+    MinimumDARecord,
+)  # cannot find a good workaround for this with relative importing...
 
 load_dotenv()
 
@@ -129,18 +130,8 @@ reserved_osti_id = 1
 # RECORD ENDPOINTS
 # Post a new Record
 @pytest.fixture
-def test_post_new_record(elink_review_client):
-    record_to_post = make_minimum_record_to_fully_release(
-        title="Test Post Record - PyTest"
-    )
-    # try:
-    #     saved_record = elink_review_client.post_new_record(record_to_post, "save") # Works - saved
-    # except exceptions.ForbiddenException as fe:
-    #     pytest.fail(f"Forbidden: Check API key or permissions associated with provided API key. {fe}")
-    # except exceptions.BadRequestException as ve:
-    #     pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
-    # except Exception as e:
-    #     pytest.fail(f"Unexpected error: {e}")
+def test_post_new_record(elink_review_client) -> RecordResponse:
+    record_to_post = MinimumDARecord(title="Test Post Record - PyTest")
 
     try:
         submitted_record = elink_review_client.post_new_record(
@@ -158,9 +149,6 @@ def test_post_new_record(elink_review_client):
 
 
 def test_get_new_single_record(test_post_new_record):
-    # record_to_post = make_minimum_record_to_fully_release(title="Test Getting New Single Record - PyTest")
-    # submitted_record = elink_review_client.post_new_record(record_to_post, "submit")
-
     posted_record = test_post_new_record
 
     elink_review_api_key = os.getenv("elink_review_api_token")
@@ -204,18 +192,21 @@ def test_update_record(test_post_new_record):
     # Update an existing Record
     elink_review_client.update_record(
         osti_id,
-        make_minimum_record_to_fully_release("Test Updating Record - PyTest"),
+        MinimumDARecord(title="Test Updating Record - PyTest"),
         "submit",
     )  # works
 
     # Get Revision based on revision number
     elink_review_client.get_revision_by_number(osti_id, revision_number)  # works
-    # Get Revision based on date Currently Not Working...?
-    # revision_by_date = elink_review_client.get_revision_by_date(osti_id, date.strftime("%Y-%d-%m")) # works
+
+    # as of 8/7/2025, elinkapi 0.5.1, these get_all_revisions() calls have stopped working)...
+    # elink_prod_client = Elink(token=os.getenv("elink_api_PRODUCTION_key"))
+    # print(elink_prod_client.get_all_revisions(1758063))
+
     # Get all RevisionHistory of a Record
-    revision_history = elink_review_client.get_all_revisions(osti_id)  # works
-    revision_history[0]
-    revision_history[-1]
+    # revision_history = elink_review_client.get_all_revisions(osti_id)  # works
+    # revision_history[0]
+    # revision_history[-1]
 
     # # MEDIA ENDPOINTS
     # # Associate new Media with a Record
