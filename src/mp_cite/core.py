@@ -131,7 +131,6 @@ def submit_new_osti_record(
 def update_state_of_osti_record(
     elinkapi: Elink, osti_id: OstiID, new_state: Literal["save", "submit"]
 ) -> RecordResponse:
-    record = elinkapi.get_single_record(osti_id)
     """
     update_state_of_osti_record allows a user to update the state of a record with provided osti_id to either "save" or "submit" (the two valid states)
 
@@ -141,7 +140,7 @@ def update_state_of_osti_record(
 
     returns the record response after updating the state.
     """
-
+    record = elinkapi.get_single_record(osti_id)
     return elinkapi.update_record(osti_id, record, new_state)
 
 
