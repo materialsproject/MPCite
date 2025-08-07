@@ -61,8 +61,6 @@ class DOIModel(BaseModel):
 
 
 class MinimumDARecord(Record):
-    """ """
-
     product_type: str = Field(default="DA")
     title: str  # Required
     organizations: List[Organization] = Field(
