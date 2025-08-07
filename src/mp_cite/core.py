@@ -1,17 +1,16 @@
 from typing import TypeAlias
 
 from elinkapi import Elink
-from elinkapi.record import RecordResponse, Record, Organization, Person
+from elinkapi.record import RecordResponse
 from pymongo import MongoClient
 
 import requests
 from elinkapi.utils import Validation
 
-from datetime import datetime
-import pytz
 
-from pydantic import Field
-from typing import List, Literal
+from mp_cite.doi_builder import MinimumDARecord
+
+from typing import Literal
 
 OstiID: TypeAlias = int
 
@@ -106,14 +105,15 @@ def update_existing_osti_record(
 def submit_new_osti_record(
     elinkapi: Elink,
     new_values: dict,
-    state="submit",  # assuming there is no need to both with saving. just send new record to osti when its ready for submission. also assume bug with DOE contract number identifier in sponsor organization is accounted for
+    state="submit",
 ) -> RecordResponse:
     """
     submit_new_osti_record generates a new record based on the provided keyword-value pairs in the new_values dict and the default minimum DA Record metadata necessary for submission
 
     :elinkapi is the elinkapi (see previous)
     :new_values is the dictionary of keywords and values which want to be included in the submitted record (besides or in lieu of default values). The title MUST be provided.
-    :state defaults to "submit" but the user can simply "save" if desired.
+    :state defaults to "submit" but the user can simply "save" if desired. This is done given our assumption that there is
+    no need to both with saving, rather, just only send new record to osti when it's ready for submission.
 
     returns the record response after submission
     """
@@ -161,27 +161,3 @@ def delete_osti_record(elinkapi: Elink, osti_id: OstiID, reason: str) -> bool:
     )
     Validation.handle_response(response)
     return response.status_code == 204  # True if deleted successfully
-
-
-class MinimumDARecord(Record):
-    product_type: str = Field(default="DA")
-    title: str  # Required
-    organizations: List[Organization] = Field(
-        default_factory=lambda: [
-            Organization(type="RESEARCHING", name="LBNL Materials Project (LBNL-MP)"),
-            Organization(
-                type="SPONSOR",
-                name="TEST SPONSOR ORG",
-                identifiers=[{"type": "CN_DOE", "value": "AC02-05CH11231"}],
-            ),  # sponsor org is necessary for submission
-        ]
-    )
-    persons: List[Person] = Field(
-        default_factory=lambda: [Person(type="AUTHOR", last_name="Persson")]
-    )
-    site_ownership_code: str = Field(default="LBNL-MP")
-    access_limitations: List[str] = Field(default_factory=lambda: ["UNL"])
-    publication_date: datetime = Field(
-        default_factory=lambda: datetime.now(tz=pytz.UTC)
-    )
-    site_url: str = Field(default="https://next-gen.materialsproject.org/materials")
