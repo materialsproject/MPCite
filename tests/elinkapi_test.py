@@ -1,5 +1,5 @@
 import pytest
-from elinkapi import Elink, Record, exceptions
+from elinkapi import Record, exceptions
 from elinkapi.record import RecordResponse
 
 import sys
@@ -8,17 +8,18 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.mp_cite.models import (
     MinimumDARecord,
 )  # cannot find a good workaround for this with relative importing...
+import src.mp_cite.core as core
 
 load_dotenv()
 
-
 valid_save_json = {
-    "title": "Electron microscope data for photons",
-    "site_ownership_code": "LLNL",
+    "title": "Test Reserving DOI - PyTest",
+    "site_ownership_code": "LBNL-MP",
     "product_type": "TR",
     "description": "Hello, from teh other side",
 }
@@ -87,31 +88,9 @@ valid_submit_json = {
     "publication_date": "2018-02-21",
     "publication_date_text": "Winter 2012",
     "released_to_osti_date": "2023-03-03",
-    "site_ownership_code": "LBNL",
+    "site_ownership_code": "LBNL-MP",
     "title": "Sample document title",
 }
-
-
-@pytest.fixture
-def elink_review_client():
-    """
-    tests whether or not the elink review client can be properly retrieved.
-    returns the elink review client
-    """
-    elink_review_api_key = os.getenv("elink_review_api_token")
-    review_endpoint = os.getenv("ELINK_REVIEW_ENDPOINT")
-    return Elink(token=elink_review_api_key, target=review_endpoint)
-
-
-@pytest.fixture
-def elink_production_client():
-    """
-    tests whether or not the elink review client can be properly retrieved.
-    returns the elink review client
-    """
-    elink_prod_api_key = os.getenv("elink_api_PRODUCTION_key")
-    return Elink(token=elink_prod_api_key)
-
 
 osti_id = "2300069"
 # osti_id = 2300063
@@ -120,9 +99,6 @@ reason = "I wanted to"
 revision_number = "2"
 date = datetime.now()
 state = "save"
-file_path = "./test_media_files/media_file.txt"
-file_path2 = "./test_media_files/best_media_file.txt"
-file_path3 = "./test_media_files/another_media_file.txt"
 json_responses = []
 reserved_osti_id = 1
 
@@ -148,85 +124,104 @@ def test_post_new_record(elink_review_client) -> RecordResponse:
         pytest.fail(f"Unexpected error: {e}")
 
 
-def test_get_new_single_record(test_post_new_record):
+def test_get_new_single_record(test_post_new_record, elink_review_client):
     posted_record = test_post_new_record
-
-    elink_review_api_key = os.getenv("elink_review_api_token")
-    review_endpoint = os.getenv("ELINK_REVIEW_ENDPOINT")
-    elink_review_client = Elink(token=elink_review_api_key, target=review_endpoint)
 
     osti_id = test_post_new_record.osti_id
 
     single_record = elink_review_client.get_single_record(osti_id)
 
-    assert osti_id is not None
-    assert single_record.title == posted_record.title
+    try:
+        assert osti_id is not None
+    except Exception:
+        core.delete_osti_record(elink_review_client, osti_id, "Failed Test")
+        pytest.fail("Assertion failed!")
+
+    try:
+        assert single_record.title == posted_record.title
+    except Exception:
+        core.delete_osti_record(elink_review_client, osti_id, "Failed Test")
+        pytest.fail("Assertion failed!")
     # assert single_record.organizations == record_to_post.organizations # this doesn't work because Elink's pydantic model defaults empty identifier to [], where as an empty identifier field is returned as None.
     # assert single_record.persons == record_to_post.persons # same issue as above^
-    assert single_record.publication_date == posted_record.publication_date
+
+    try:
+        assert single_record.publication_date == posted_record.publication_date
+    except Exception:
+        core.delete_osti_record(elink_review_client, osti_id, "Failed Test")
+        pytest.fail("Assertion failed!")
+
+    core.delete_osti_record(elink_review_client, osti_id, "Completed Test")
 
 
 def test_invalid_query(elink_production_client):
     list_of_records = elink_production_client.query_records(
         title="Allo-ballo holla olah"
-    )  # works, nothing found
+    )  # works if nothing found
     assert list_of_records.total_rows == 0
 
 
 # Reserve a DOI
 def test_reserve_DOI(elink_review_client):
     try:
-        elink_review_client.reserve_doi(Record(**valid_save_json))  # works - naved
-    except Exception:
-        print("failed to reserve doi on record")
+        rr = elink_review_client.reserve_doi(Record(**valid_save_json))
+    except exceptions.ForbiddenException as fe:
+        core.delete_osti_record(elink_review_client, rr.osti_id, "Completed Test")
+        pytest.fail(
+            f"Forbidden: Check API key or permissions associated with provided API key. {fe}"
+        )
+    except exceptions.BadRequestException as ve:
+        core.delete_osti_record(elink_review_client, rr.osti_id, "Completed Test")
+        pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
+    except Exception as e:
+        core.delete_osti_record(elink_review_client, rr.osti_id, "Completed Test")
+        pytest.fail(f"Unexpected error: {e}")
+
+    core.delete_osti_record(elink_review_client, rr.osti_id, "Completed Test")
 
 
-def test_update_record(test_post_new_record):
+def test_update_record(test_post_new_record, elink_review_client):
     posted_record = test_post_new_record
     osti_id = posted_record.osti_id
 
-    elink_review_api_key = os.getenv("elink_review_api_token")
-    review_endpoint = os.getenv("ELINK_REVIEW_ENDPOINT")
-    elink_review_client = Elink(token=elink_review_api_key, target=review_endpoint)
-
     # Update an existing Record
-    elink_review_client.update_record(
-        osti_id,
-        MinimumDARecord(title="Test Updating Record - PyTest"),
-        "submit",
-    )  # works
+    try:
+        elink_review_client.update_record(
+            osti_id,
+            MinimumDARecord(title="Test Updating Record - PyTest"),
+            "submit",
+        )
+    except exceptions.ForbiddenException as fe:
+        core.delete_osti_record(elink_review_client, osti_id, "Completed Test")
+        pytest.fail(
+            f"Forbidden: Check API key or permissions associated with provided API key. {fe}"
+        )
+    except exceptions.BadRequestException as ve:
+        core.delete_osti_record(elink_review_client, osti_id, "Completed Test")
+        pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
+    except Exception as e:
+        core.delete_osti_record(elink_review_client, osti_id, "Completed Test")
+        pytest.fail(f"Unexpected error: {e}")
 
     # Get Revision based on revision number
-    elink_review_client.get_revision_by_number(osti_id, revision_number)  # works
+    try:
+        elink_review_client.get_revision_by_number(osti_id, revision_number)
+    except Exception:
+        core.delete_osti_record(elink_review_client, osti_id, "Completed Test")
+        pytest.fail(
+            f"Failed to get revision {revision_number} on record with OSTI ID: {osti_id}"
+        )
 
     # as of 8/7/2025, elinkapi 0.5.1, these get_all_revisions() calls have stopped working)...
-    # elink_prod_client = Elink(token=os.getenv("elink_api_PRODUCTION_key"))
-    # print(elink_prod_client.get_all_revisions(1758063))
-
     # Get all RevisionHistory of a Record
-    # revision_history = elink_review_client.get_all_revisions(osti_id)  # works
-    # revision_history[0]
-    # revision_history[-1]
+    try:
+        revision_history = elink_review_client.get_all_revisions(osti_id)  # works
+        revision_history[0]
+        revision_history[-1]
+    except Exception:
+        core.delete_osti_record(elink_review_client, osti_id, "Completed Test")
+        pytest.fail(
+            f"Failed to get entire revision history of record with OSTI ID: {osti_id}"
+        )
 
-    # # MEDIA ENDPOINTS
-    # # Associate new Media with a Record
-    # posted_media = elink_review_client.post_media(osti_id, file_path, {"title": "Title of the Media media_file.txt"})
-    # posted_media3 = elink_review_client.post_media(osti_id, file_path3, {"title": "Title of the Media media_file.txt"})
-    # media_id = posted_media.media_id
-    # # Replace existing Media on a Record
-    # replaced_media2 = elink_review_client.put_media(osti_id, media_id, file_path2, {"title": "Changed this title now"})
-    # # Get Media associated with OSTI ID
-    # media = elink_review_client.get_media(osti_id)
-    # # Get Media content of a media resource
-    # media_content = elink_review_client.get_media_content(media_id)
-    # # Delete Media with media_id off of a Record
-    # isSuccessDelete = elink_review_client.delete_single_media(osti_id, media_id, reason) #works
-    # assert isSuccessDelete
-    # # Delete all Media associated with a Record
-    # isSuccessAllDelete = elink_review_client.delete_all_media(osti_id, reason)
-    # assert isSuccessAllDelete
-
-    # # Should see that all media has been deleted
-    # final_media = elink_review_client.get_media(osti_id)
-
-    # print("Finished")
+    core.delete_osti_record(elink_review_client, osti_id, "Completed Test")

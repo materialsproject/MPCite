@@ -1,6 +1,6 @@
 import os
 import pytest
-from elinkapi import Elink, exceptions
+from elinkapi import Elink
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,31 +25,3 @@ def elink_production_client():
     """
     elink_prod_api_key = os.getenv("elink_api_PRODUCTION_key")
     return Elink(token=elink_prod_api_key)
-
-
-def test_get_single_record(elink_production_client):
-    try:
-        record = elink_production_client.get_single_record(1190959)
-        assert record.title == "Materials Data on Si by Materials Project"
-        assert record.osti_id == 1190959
-    except exceptions.ForbiddenException as fe:
-        pytest.fail(
-            f"Forbidden: Check API key or permissions associated with provided API key. {fe}"
-        )
-    except exceptions.BadRequestException as ve:
-        pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
-    except Exception as e:
-        pytest.fail(f"Unexpected error: {e}")
-
-
-def test_query_records(elink_production_client):
-    try:
-        elink_production_client.query_records()
-    except exceptions.ForbiddenException as fe:
-        pytest.fail(
-            f"Forbidden: Check API key or permissions associated with provided API key. {fe}"
-        )
-    except exceptions.BadRequestException as ve:
-        pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
-    except Exception as e:
-        pytest.fail(f"Unexpected error: {e}")
