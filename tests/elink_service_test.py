@@ -1,7 +1,6 @@
-from elinkapi import Elink
+from elinkapi import exceptions
 from elinkapi.record import RecordResponse
 import pytest
-import os
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,17 +15,44 @@ load_dotenv()
 # 3. make sure record updates work
 # 4. deleting records?
 # 5+. test any other surfaces of the Elink api that we interact with
-@pytest.fixture
-def elink_review_client():
-    """
-    tests whether or not the elink review client can be properly retrieved.
-    returns the elink review client
-    """
-    elink_review_api_key = os.getenv("elink_review_api_token")
-    review_endpoint = os.getenv("ELINK_REVIEW_ENDPOINT")
-    return Elink(token=elink_review_api_key, target=review_endpoint)
 
 
-def test_elink_query(elink_review_client):
-    # placeholder, just to verify gh actions until full test suite is done
+def test_get_single_record(elink_production_client):
+    """
+    tried to use the production client to retrieve a record.
+    """
+    try:
+        record = elink_production_client.get_single_record(1190959)
+        assert record.title == "Materials Data on Si by Materials Project"
+        assert record.osti_id == 1190959
+    except exceptions.ForbiddenException as fe:
+        pytest.fail(
+            f"Forbidden: Check API key or permissions associated with provided API key. {fe}"
+        )
+    except exceptions.BadRequestException as ve:
+        pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
+    except Exception as e:
+        pytest.fail(f"Unexpected error: {e}")
+
+
+def test_query_records(elink_production_client):
+    """
+    tests the query functionality of the elinkapi on the production environment
+    """
+    try:
+        elink_production_client.query_records()
+    except exceptions.ForbiddenException as fe:
+        pytest.fail(
+            f"Forbidden: Check API key or permissions associated with provided API key. {fe}"
+        )
+    except exceptions.BadRequestException as ve:
+        pytest.fail(f"Bad Request: Possibly incorrect parameters. {ve}")
+    except Exception as e:
+        pytest.fail(f"Unexpected error: {e}")
+
+
+def test_query_exists(elink_review_client):
+    """
+    tests to see that the query does in fact resolve entries in the form of RecordResponse objects.
+    """
     assert isinstance(next(elink_review_client.query_records()), RecordResponse)

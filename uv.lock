@@ -118,7 +118,7 @@ wheels = [
 
 [[package]]
 name = "elinkapi"
-version = "0.5.1"
+version = "0.5.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
@@ -126,9 +126,9 @@ dependencies = [
     { name = "requests-toolbelt" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/77/11/aa584c66c16a417433a6ac51d232e4cf35a1b5c5a8a747193c73503c8b14/elinkapi-0.5.1.tar.gz", hash = "sha256:33e73648bcb5272e458215698219dcc1c09645f0726798883a2adcdc07f5e00e", size = 51606, upload-time = "2025-08-06T17:49:57.796Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/39/f652cd398619b6bd9f4a1fc8c9255202c130b36e8c87df1872100f5d744f/elinkapi-0.5.2.tar.gz", hash = "sha256:934134500721aba9e5e37aab232f3c7aa548c87a114ae71f0f0d1b27240dda02", size = 52202, upload-time = "2025-08-08T15:18:00.606Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/86/28/dec8dfc0a2ddd7ba16a90c29bb7c832f9323b5b2c6bb9699244601bdb289/elinkapi-0.5.1-py3-none-any.whl", hash = "sha256:0ab14ed05a5860480697dba860cb684b77cda042006212e597b5c5ec253df481", size = 37695, upload-time = "2025-08-06T17:49:56.434Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/da/27cb5c19f8971c18e9a2b2ebd8db56e8f01e718bf0c44bd7cb632574cb12/elinkapi-0.5.2-py3-none-any.whl", hash = "sha256:eb372efc3e6683a6c95e807f3450b51cfe55daff0c268081c606b975a35ee308", size = 37895, upload-time = "2025-08-08T15:17:59.299Z" },
 ]
 
 [[package]]
@@ -321,7 +321,7 @@ lint = [
 
 [package.metadata]
 requires-dist = [
-    { name = "elinkapi", specifier = ">=0.4.9" },
+    { name = "elinkapi", specifier = ">=0.5.2" },
     { name = "pydantic", specifier = ">=2.11.7" },
     { name = "pymongo", specifier = ">=4.13.2" },
     { name = "python-dotenv", specifier = ">=1.1.1" },
