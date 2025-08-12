@@ -4,6 +4,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import src.mp_cite.core as core
 
+from tests.conf_test import elink_review_client
 
 from elinkapi import Organization, Person, Record
 
@@ -154,18 +155,14 @@ def test_update_state_debug(elink_review_client):
     # save in post then update to submit
     my_rr = elink_review_client.post_new_record(my_record, "save")
     osti_id = my_rr.osti_id
-    print(
-        f'After post_new_record(my_record, "save"), my record response workflow_status is {my_rr.workflow_status}'
-    )
+    print(f'After post_new_record(my_record, "save"), my record response workflow_status is {my_rr.workflow_status}')
     print(f"Revision Number is {my_rr.revision}")
 
     got_record = elink_review_client.get_single_record(osti_id)
     record_updated_state = elink_review_client.update_record(
         osti_id, got_record, "submit"
     )
-    print(
-        f'After update_record(osti_id, got_record, "submit"), my record response workflow_status is {record_updated_state.workflow_status}'
-    )
+    print(f'After update_record(osti_id, got_record, "submit"), my record response workflow_status is {record_updated_state.workflow_status}')
     print(f"Revision Number is {record_updated_state.revision}\n")
 
     # submit in post then update to save
@@ -177,12 +174,8 @@ def test_update_state_debug(elink_review_client):
     print(f"And revision number is {record_submit_first.revision}")
 
     got_submitted_record = elink_review_client.get_single_record(osti_id)
-    record_updated_state = elink_review_client.update_record(
-        osti_id, got_submitted_record, "submit"
-    )
-    print(
-        f'After update_record(osti_id, got_record, "save"), my record response workflow_status is {record_updated_state.workflow_status}'
-    )
+    record_updated_state = elink_review_client.update_record(osti_id, got_submitted_record, "submit")
+    print(f'After update_record(osti_id, got_submitted_record, "save"), my record response workflow_status is {record_updated_state.workflow_status}')
     print(f"And the revision number is {record_updated_state.revision}\n")
 
     # update the workflow_status manually?
