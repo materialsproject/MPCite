@@ -15,6 +15,7 @@ from src.mp_cite.models import (
 )  # cannot find a good workaround for this with relative importing...
 import src.mp_cite.core as core
 
+from tests.conf_test import elink_review_client
 
 load_dotenv()
 

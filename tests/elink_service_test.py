@@ -3,6 +3,8 @@ from elinkapi.record import RecordResponse
 import pytest
 from dotenv import load_dotenv
 
+from tests.conf_test import elink_review_client
+
 load_dotenv()
 
 # TODO: Write tests that verify our usage of Elink is correct,
