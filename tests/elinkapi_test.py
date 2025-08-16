@@ -8,14 +8,13 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 
+from .conf_test import elink_production_client, elink_review_client
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.mp_cite.models import (
     MinimumDARecord,
 )  # cannot find a good workaround for this with relative importing...
 import src.mp_cite.core as core
-
-from tests.conf_test import elink_review_client
 
 load_dotenv()
 

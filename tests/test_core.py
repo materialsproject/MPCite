@@ -4,9 +4,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import src.mp_cite.core as core
 
-from tests.conf_test import elink_review_client
-
-from elinkapi import Organization, Person, Record
+from .conf_test import elink_review_client
 
 import pytest
 
@@ -52,6 +50,7 @@ def test_update_existing_osti_record(elink_review_client):
         #     new_state="save",
         # )
 
+        # elinkapi<=0.5.2 this fails the test
         elink_review_client.patch_record(
             osti_id, {"description": "This is a new description"}
         )
@@ -81,8 +80,13 @@ def test_submit_new_osti_record(elink_review_client):
     record_got = elink_review_client.get_single_record(osti_id)
 
     for keyword, value in record_got:
-        if keyword == "workflow_status" or getattr(record_submit, keyword) == value:
+        if (
+            keyword == "workflow_status"
+            or keyword == "audit_logs"
+            or getattr(record_submit, keyword) == value
+        ):
             # since the workflow_status of submitted osti records changes so quickly in the review environment, we cannot verify that one.
+            # audit logs updated during and after submission so it will change.
             pass
         else:
             core.delete_osti_record(elink_review_client, osti_id, "Test Completed.")
@@ -129,69 +133,3 @@ def test_update_state_of_osti_record(elink_review_client):
         # Need to ask about the desired functionality updating state to submit...
 
     core.delete_osti_record(elink_review_client, osti_id, "Test Completed.")
-
-
-def test_update_state_debug(elink_review_client):
-    my_record_dict = {
-        "product_type": "DA",
-        "title": "My Dataset",
-        "organizations": [
-            Organization(type="RESEARCHING", name="LBNL Materials Project (LBNL-MP)"),
-            Organization(
-                type="SPONSOR",
-                name="TEST SPONSOR ORG",
-                identifiers=[{"type": "CN_DOE", "value": "AC02-05CH11231"}],
-            ),  # sponsor org is necessary for submission
-        ],
-        "persons": [Person(type="AUTHOR", last_name="Persson")],
-        "site_ownership_code": "LBNL-MP",
-        "access_limitations": ["UNL"],
-        "publication_date": "2025-8-12",
-        "site_url": "https://next-gen.materialsproject.org/materials",
-    }
-
-    my_record = Record(**my_record_dict)
-
-    # save in post then update to submit
-    my_rr = elink_review_client.post_new_record(my_record, "save")
-    osti_id = my_rr.osti_id
-    print(f'After post_new_record(my_record, "save"), my record response workflow_status is {my_rr.workflow_status}')
-    print(f"Revision Number is {my_rr.revision}")
-
-    got_record = elink_review_client.get_single_record(osti_id)
-    record_updated_state = elink_review_client.update_record(
-        osti_id, got_record, "submit"
-    )
-    print(f'After update_record(osti_id, got_record, "submit"), my record response workflow_status is {record_updated_state.workflow_status}')
-    print(f"Revision Number is {record_updated_state.revision}\n")
-
-    # submit in post then update to save
-    record_submit_first = elink_review_client.post_new_record(my_record, "submit")
-    osti_id = record_submit_first.osti_id
-    print(
-        f'Instead of saving, if I post_new_record(my_record, "submit") immediately, then my record response workflow status is {record_submit_first.workflow_status}'
-    )
-    print(f"And revision number is {record_submit_first.revision}")
-
-    got_submitted_record = elink_review_client.get_single_record(osti_id)
-    record_updated_state = elink_review_client.update_record(osti_id, got_submitted_record, "submit")
-    print(f'After update_record(osti_id, got_submitted_record, "save"), my record response workflow_status is {record_updated_state.workflow_status}')
-    print(f"And the revision number is {record_updated_state.revision}\n")
-
-    # update the workflow_status manually?
-    record_to_manual_update = elink_review_client.post_new_record(my_record, "save")
-    osti_id = record_to_manual_update.osti_id
-    print(
-        f'As expected, after post_new_record(my_record, "save"), the workflow status is {record_to_manual_update.workflow_status}'
-    )
-    print(f"And the revision number is {record_to_manual_update.revision}")
-
-    got_record_to_manual_update = elink_review_client.get_single_record(osti_id)
-    got_record_to_manual_update.workflow_status = "SO"
-    record_after_manual_update = elink_review_client.update_record(
-        osti_id, got_record_to_manual_update, "submit"
-    )
-    print(
-        f'After update_record(osti_id, got_record_to_manual_update, "submit"), my record response workflow_status is {record_after_manual_update.workflow_status}'
-    )
-    print(f"Revision Number is {record_after_manual_update.revision}\n")
