@@ -210,10 +210,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# json files for storing production records
-*.json
-.env
-
-/json_pages
-/notebooks
-/test_json_pages
+json_pages/
+notebooks/
+test_json_pages/
