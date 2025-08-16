@@ -13,6 +13,7 @@ import src.mp_cite.core as core
 
 load_dotenv()
 
+
 def test_get_single_record(elink_production_client):
     """
     tried to use the production client to retrieve a record.
@@ -53,6 +54,7 @@ def test_query_exists(elink_review_client):
     """
     assert isinstance(next(elink_review_client.query_records()), RecordResponse)
 
+
 def test_switching_states(elink_review_client):
     """
     This test repeats the tests done to demonstrate unexpected behavior or passing "save" and "submit" states present in Elinkapi 0.5.2.
@@ -81,34 +83,37 @@ def test_switching_states(elink_review_client):
     try:
         my_rr = elink_review_client.post_new_record(my_record, "save")
         osti_id = my_rr.osti_id
-        assert my_rr.workflow_status == 'SA'
+        assert my_rr.workflow_status == "SA"
         assert my_rr.revision == 1
 
         got_record = elink_review_client.get_single_record(osti_id)
         record_updated_state = elink_review_client.update_record(
             osti_id, got_record, "submit"
         )
-        assert record_updated_state.workflow_status == 'SO'
+        assert record_updated_state.workflow_status == "SO"
         assert record_updated_state.revision == 2
         core.delete_osti_record(elink_review_client, osti_id, "Test completed!")
-    except Exception as e:
+    except Exception:
         core.delete_osti_record(elink_review_client, osti_id, "Test failed!")
         pytest.fail("Test failed!")
-        
 
     # submit in post then update to save
     try:
         record_submit_first = elink_review_client.post_new_record(my_record, "submit")
         osti_id = record_submit_first.osti_id
-        assert record_submit_first.workflow_status == 'SO'
+        assert record_submit_first.workflow_status == "SO"
         assert record_submit_first.revision == 1
 
         got_submitted_record = elink_review_client.get_single_record(osti_id)
-        record_updated_state = elink_review_client.update_record(osti_id, got_submitted_record, "save")
-        assert record_updated_state.workflow_status == 'SA' # record was submitted but switched to save, so should be 'SA'
+        record_updated_state = elink_review_client.update_record(
+            osti_id, got_submitted_record, "save"
+        )
+        assert (
+            record_updated_state.workflow_status == "SA"
+        )  # record was submitted but switched to save, so should be 'SA'
         assert record_updated_state.revision == 2
         core.delete_osti_record(elink_review_client, osti_id, "Test completed!")
-    except Exception as e:
+    except Exception:
         core.delete_osti_record(elink_review_client, osti_id, "Test failed!")
         pytest.fail("Test failed!")
 
@@ -116,15 +121,17 @@ def test_switching_states(elink_review_client):
     try:
         record_to_manual_update = elink_review_client.post_new_record(my_record, "save")
         osti_id = record_to_manual_update.osti_id
-        assert record_to_manual_update.workflow_status == 'SA'
+        assert record_to_manual_update.workflow_status == "SA"
         assert record_to_manual_update.revision == 1
 
         got_record_to_manual_update = elink_review_client.get_single_record(osti_id)
-        got_record_to_manual_update.workflow_status = 'SO'
-        record_after_manual_update = elink_review_client.update_record(osti_id, got_record_to_manual_update, "submit")
-        assert record_after_manual_update.workflow_status == 'SO'
+        got_record_to_manual_update.workflow_status = "SO"
+        record_after_manual_update = elink_review_client.update_record(
+            osti_id, got_record_to_manual_update, "submit"
+        )
+        assert record_after_manual_update.workflow_status == "SO"
         assert record_after_manual_update.revision == 2
         core.delete_osti_record(elink_review_client, osti_id, "Test completed!")
-    except Exception as e:
+    except Exception:
         core.delete_osti_record(elink_review_client, osti_id, "Test failed!")
         pytest.fail("Test failed!")
