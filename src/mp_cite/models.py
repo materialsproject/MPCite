@@ -1,10 +1,9 @@
 from pydantic import BaseModel, Field, model_validator
 
-from datetime import datetime
+from datetime import datetime, timezone, date
 from elinkapi import Record, Organization, Person
 
 from typing import List, Any
-import pytz
 
 
 class DOIModel(BaseModel):
@@ -78,7 +77,7 @@ class MinimumDARecord(Record):
     )
     site_ownership_code: str = Field(default="LBNL-MP")
     access_limitations: List[str] = Field(default_factory=lambda: ["UNL"])
-    publication_date: datetime = Field(
-        default_factory=lambda: datetime.now(tz=pytz.UTC)
+    publication_date: date = Field(
+        default_factory=lambda: datetime.now(timezone.utc).date()
     )
     site_url: str = Field(default="https://next-gen.materialsproject.org/materials")

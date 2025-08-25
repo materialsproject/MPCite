@@ -28,7 +28,7 @@ jobs:
 
       - name: Run tests
         env:
-          ELINK_REVIEW_API_TOKEN: ${{ secrets.ELINK_REVIEW_API_TOKEN }}
+          elink_api_PRODUCTION_key: ${{ secrets.ELINK_PRODUCTION_API_TOKEN }}
+          elink_review_api_token: ${{ secrets.ELINK_REVIEW_API_TOKEN }}
           ELINK_REVIEW_ENDPOINT: ${{ secrets.ELINK_REVIEW_ENDPOINT }}
         run: uv run pytest tests
-# codecov?

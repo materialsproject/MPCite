@@ -65,7 +65,10 @@ def find_out_of_date_doi_entries(
 
 
 def update_existing_osti_record(
-    elinkapi: Elink, osti_id: OstiID, new_values: dict
+    elinkapi: Elink,
+    osti_id: OstiID,
+    new_values: dict,
+    new_state: Literal["save", "submit"],
 ) -> RecordResponse:
     """
     update_existing_osti_record allows users to provide a dictionary of keywords and new values, which will replace the old values under the same keywords in the record with the given osti id
@@ -93,9 +96,16 @@ def update_existing_osti_record(
     for keyword in new_values:
         setattr(record_on_elink, keyword, new_values[keyword])
 
-    return elinkapi.update_record(
-        osti_id, record_on_elink, state="save"
-    )  # user should use update_state_of_osti_record to submit instead
+    if new_state == "submit":
+        # due to bug in elinkapi version<=0.5.2, new_state passing does not update workflow status.
+        # for now, it is updated manually to 'SO' submitted to OSTI, which is should do itself.
+        record_on_elink.workflow_status = "SO"
+
+    return elinkapi.update_record(osti_id, record_on_elink, state=new_state)
+
+    # due to bug in elinkapi version<=0.5.2, elinkapi.patch_record fails due to bad casting of dict to str.
+    # when the next release fixes this, we can change it to this again below.
+    # elinkapi.patch_record(osti_id, new_values, new_state)
 
 
 def submit_new_osti_record(
