@@ -13,6 +13,15 @@ if TYPE_CHECKING:
 
 OstiID: TypeAlias = int
 
+# Workflow states in which OSTI is actively processing a release, so starting a new
+# revision would race that processing.
+_TRANSIENT_STATUSES: frozenset[str] = frozenset(
+    {
+        WorkflowStatus.SubmitReleasing.value,  # "SR"
+        WorkflowStatus.SubmitOSTI.value,  # "SO"
+    }
+)
+
 
 class OstiClient:
     """Single client for the Materials Project DOI workflow.
@@ -177,14 +186,39 @@ class OstiClient:
             "before minting."
         )
 
+    def _raise_if_transient(self, osti_id: OstiID, status: str) -> None:
+        """Reject an update when the record is mid-release.
+
+        The pre-check shared by `update_record_fields` and `update_state`.
+        A record may be revised from any settled state (draft, released, or a failed
+        state), but not while OSTI is actively releasing it.
+
+        Args:
+            osti_id: OSTI ID of the record, for the error message.
+            status: The record's current ``workflow_status``.
+
+        Raises:
+            RuntimeError: If ``status`` is a transient release state (``SR``/``SO``).
+        """
+        if status in _TRANSIENT_STATUSES:
+            raise RuntimeError(
+                f"Record {osti_id} is mid-release (workflow_status {status!r}); "
+                "wait for it to settle (e.g. with wait_for_release) before revising."
+            )
+
     def update_record_fields(
         self,
         osti_id: OstiID,
         new_values: dict[str, Any],
         *,
         state: Literal["save", "submit"] = "save",
+        precheck: bool = True,
     ) -> RecordResponse:
         """Partially update an existing record, identified by its OSTI ID.
+
+        With ``state="save"`` the revision is left as a draft; with ``state="submit"``
+        it is sent on for release (required to make a revision of a released record go
+        live again).
 
         Args:
             osti_id: OSTI ID of the record that ought to be updated.
@@ -192,10 +226,20 @@ class OstiClient:
                 (JSON-serializable) values. Only these fields are changed.
             state: Workflow state for the resulting revision — ``"save"`` (the default)
                 to draft it, or ``"submit"`` to send it on for release.
+            precheck: When ``True`` (the default), fetch the record first and refuse to
+                patch it while it is mid-release (``workflow_status`` ``SR``/``SO``),
+                where a revision would race OSTI's processing. Pass ``False`` to skip the
+                extra fetch when the record's state is already known to be settled.
 
         Returns:
             The record response for the new revision.
+
+        Raises:
+            RuntimeError: If ``precheck`` is set and the record is mid-release.
         """
+        if precheck:
+            self._raise_if_transient(osti_id, self.get_record(osti_id).workflow_status)
+
         patch_operations = [
             {"op": "add", "path": f"/{field}", "value": value}
             for field, value in new_values.items()
@@ -208,6 +252,10 @@ class OstiClient:
     ) -> RecordResponse:
         """Update the state of a record to either ``"save"`` or ``"submit"``.
 
+        Re-``submit`` of a released record produces a new revision, like
+        `update_record_fields`. The same mid-release pre-check applies: the record
+        it fetches is rejected when caught in a transient release state (``SR``/``SO``).
+
         Args:
             osti_id: OSTI ID of the record whose state should be updated.
             new_state: The new state, one of the two valid values ``"save"`` or
@@ -215,8 +263,12 @@ class OstiClient:
 
         Returns:
             The record response after updating the state.
+
+        Raises:
+            RuntimeError: If the record is mid-release when fetched.
         """
         record = self.get_record(osti_id)
+        self._raise_if_transient(osti_id, record.workflow_status)
         return self.elink.update_record(osti_id, record, new_state)
 
     def wait_for_release(

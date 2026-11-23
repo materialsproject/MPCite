@@ -1,3 +1,6 @@
+import os
+
+import pytest
 from elinkapi.record import RecordResponse
 
 from mp_cite import (
@@ -48,3 +51,45 @@ def test_contribs_record_roundtrip(osti_review_client):
     finally:
         # delete_record raises on failure; a plain return means the record is gone.
         osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+
+
+@pytest.mark.skipif(
+    not os.getenv("ELINK_RUN_RELEASE_TESTS"),
+    reason="release+revise cycle is slow; set ELINK_RUN_RELEASE_TESTS=1 to run",
+)
+def test_revise_released_record(osti_review_client):
+    """Resolve D1 O-14: confirm OSTI accepts a revision of an already-released record.
+
+    Submits a contributed record, waits for release (workflow_status 'R'), then revises
+    it via update_record_fields (state="submit", which produces a new revision). Opt-in
+    through ELINK_RUN_RELEASE_TESTS because the release step can take minutes in the
+    review environment.
+    """
+    request = ContribsDoiRequest(
+        title="mp_cite integration test — revise released",
+        site_url="https://contribs.materialsproject.org/projects/mp_cite_revise_test",
+        description="Temporary record created by the mp_cite test suite.",
+        persons=[Person(type="AUTHOR", first_name="Test", last_name="Author")],
+        organizations=[Organization(type="SPONSOR", name="Test Non-DOE Sponsor")],
+    )
+
+    created = osti_review_client.submit_new_record(request, state="submit")
+    osti_id = created.osti_id
+    try:
+        osti_review_client.wait_for_release(osti_id, timeout=600.0, interval=20.0)
+
+        # The revision of a released record: same update path, new revision.
+        revised = osti_review_client.update_record_fields(
+            osti_id,
+            {"title": "mp_cite integration test — revised title"},
+            state="submit",
+        )
+        assert isinstance(revised, RecordResponse)
+        assert revised.osti_id == osti_id
+    finally:
+        # A released DOI may not be deletable; clean up best-effort without masking the
+        # test result.
+        try:
+            osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+        except Exception:
+            pass

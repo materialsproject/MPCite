@@ -26,6 +26,8 @@ class _FakeElink:
         self._created = created
         self.post_calls = []
         self.query_calls = []
+        self.patch_calls = []
+        self.update_calls = []
 
     def get_single_record(self, osti_id):
         status = self._statuses.pop(0)
@@ -38,6 +40,14 @@ class _FakeElink:
     def post_new_record(self, record, state):
         self.post_calls.append((record, state))
         return self._created
+
+    def patch_json(self, osti_id, jsonpatch, state):
+        self.patch_calls.append((osti_id, jsonpatch, state))
+        return SimpleNamespace(osti_id=osti_id)
+
+    def update_record(self, osti_id, record, state):
+        self.update_calls.append((osti_id, state))
+        return SimpleNamespace(osti_id=osti_id)
 
 
 def test_wait_for_release_returns_when_released(monkeypatch):
@@ -115,3 +125,58 @@ def test_find_or_create_requires_site_unique_id():
     with pytest.raises(ValueError):
         osti.find_or_create(record)
     assert elink.query_calls == []  # fails before any lookup
+
+
+@pytest.mark.parametrize("settled", ["SA", "SV", "R", "SF", "SX"])
+def test_update_record_fields_patches_from_any_settled_state(settled):
+    # A released ("R") record revises the same way a draft does: one PATCH, new revision.
+    elink = _FakeElink(statuses=[settled])
+    osti = OstiClient(elink)
+
+    osti.update_record_fields(42, {"title": "New"}, state="submit")
+
+    assert elink.patch_calls == [
+        (42, [{"op": "add", "path": "/title", "value": "New"}], "submit")
+    ]
+
+
+@pytest.mark.parametrize("transient", ["SR", "SO"])
+def test_update_record_fields_rejected_mid_release(transient):
+    elink = _FakeElink(statuses=[transient])
+    osti = OstiClient(elink)
+
+    with pytest.raises(RuntimeError):
+        osti.update_record_fields(42, {"title": "New"})
+    assert elink.patch_calls == []  # never patched while mid-release
+
+
+def test_update_record_fields_precheck_false_skips_fetch():
+    # No statuses queued, so any pre-check fetch would IndexError; a clean patch proves
+    # the fetch was skipped.
+    elink = _FakeElink(statuses=[])
+    osti = OstiClient(elink)
+
+    osti.update_record_fields(42, {"title": "New"}, precheck=False)
+
+    assert elink.patch_calls == [
+        (42, [{"op": "add", "path": "/title", "value": "New"}], "save")
+    ]
+
+
+def test_update_state_submits_from_settled_state():
+    elink = _FakeElink(statuses=["R"])
+    osti = OstiClient(elink)
+
+    osti.update_state(42, "submit")
+
+    assert elink.update_calls == [(42, "submit")]
+
+
+@pytest.mark.parametrize("transient", ["SR", "SO"])
+def test_update_state_rejected_mid_release(transient):
+    elink = _FakeElink(statuses=[transient])
+    osti = OstiClient(elink)
+
+    with pytest.raises(RuntimeError):
+        osti.update_state(42, "submit")
+    assert elink.update_calls == []
