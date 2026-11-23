@@ -9,14 +9,10 @@ _NAMES_BY_SUBMODULE: dict[str, tuple[str, ...]] = {
         "MP_SPONSOR_IDENTIFIERS",
         "MinimumDARecord",
         "ContribsDoiRequest",
-        "DOIModel",
-        "ContribsDoiModel",
     ),
     "mp_cite.settings": (
         "get_elink_client",
         "ElinkSettings",
-        "get_mongo_client",
-        "MongoSettings",
     ),
     "elinkapi": (
         "Person",
@@ -36,12 +32,8 @@ __all__ = [
     "MP_SPONSOR_IDENTIFIERS",
     "MinimumDARecord",
     "ContribsDoiRequest",
-    "DOIModel",
-    "ContribsDoiModel",
     "get_elink_client",
     "ElinkSettings",
-    "get_mongo_client",
-    "MongoSettings",
     "Person",
     "Organization",
     "Affiliation",
@@ -81,14 +73,10 @@ if TYPE_CHECKING:
     from mp_cite.models import (
         MP_SPONSOR_IDENTIFIERS,
         MP_SPONSOR_NAME,
-        ContribsDoiModel,
         ContribsDoiRequest,
-        DOIModel,
         MinimumDARecord,
     )
     from mp_cite.settings import (
         ElinkSettings,
-        MongoSettings,
         get_elink_client,
-        get_mongo_client,
     )

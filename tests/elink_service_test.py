@@ -46,4 +46,5 @@ def test_contribs_record_roundtrip(osti_review_client):
         resaved = osti_review_client.update_state(osti_id, "save")
         assert isinstance(resaved, RecordResponse)
     finally:
-        assert osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+        # delete_record raises on failure; a plain return means the record is gone.
+        osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")

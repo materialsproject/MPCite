@@ -1,124 +1,117 @@
-"""Offline tests for core.py mongo logic, using a tiny in-memory fake (no mongomock dep)."""
+"""Offline tests for core.py logic, using tiny in-memory fakes (no network dep)."""
 
-from datetime import datetime
+from types import SimpleNamespace
+
+import pytest
 
 from mp_cite import OstiClient
 
 
-class _FakeCollection:
-    def __init__(self, docs):
-        self._docs = docs
+class _FakeQuery:
+    """Stand-in for elinkapi.query.Query: carries a row count and the current page."""
 
-    @staticmethod
-    def _matches(doc, filt):
-        for key, cond in filt.items():
-            val = doc.get(key)
-            if isinstance(cond, dict):
-                if "$gt" in cond and not (val is not None and val > cond["$gt"]):
-                    return False
-                if "$in" in cond and val not in cond["$in"]:
-                    return False
-            elif val != cond:
-                return False
-        return True
-
-    def find(self, filt=None, projection=None):
-        filt = filt or {}
-        return (doc for doc in self._docs if self._matches(doc, filt))
-
-    def aggregate(self, pipeline):
-        docs = list(self._docs)
-        for stage in pipeline:
-            if "$project" in stage:
-                fields = [k for k, keep in stage["$project"].items() if keep == 1]
-                docs = [{k: d.get(k) for k in fields} for d in docs]
-            elif "$sort" in stage:
-                ((field, direction),) = stage["$sort"].items()
-                docs.sort(key=lambda d: d.get(field), reverse=(direction == -1))
-            elif "$limit" in stage:
-                docs = docs[: stage["$limit"]]
-        return iter(docs)
+    def __init__(self, data):
+        self.data = list(data)
+        self.total_rows = len(self.data)
 
 
-class _FakeDB:
-    def __init__(self, collections):
-        self._collections = collections
+class _FakeElink:
+    """Minimal fake of the elinkapi.Elink surface OstiClient calls."""
 
-    def __getitem__(self, name):
-        return _FakeCollection(self._collections[name])
+    def __init__(self, *, statuses=None, query_result=None, created=None):
+        # wait_for_release: a queue of workflow_status values to hand back, in order.
+        self._statuses = list(statuses or [])
+        # find_or_create: the Query to return, and what post_new_record should return.
+        self._query_result = query_result
+        self._created = created
+        self.post_calls = []
+        self.query_calls = []
 
+    def get_single_record(self, osti_id):
+        status = self._statuses.pop(0)
+        return SimpleNamespace(osti_id=osti_id, workflow_status=status)
 
-class _FakeClient:
-    def __init__(self, databases):
-        self._databases = databases
+    def query_records(self, **kwargs):
+        self.query_calls.append(kwargs)
+        return self._query_result
 
-    def __getitem__(self, name):
-        return _FakeDB(self._databases[name])
-
-
-def test_find_out_of_date_doi_entries_core_defaults():
-    client = _FakeClient(
-        {
-            "mp_db": {
-                "robocrys": [
-                    {"material_id": "mp-1", "last_updated": datetime(2026, 2, 1)},
-                    {"material_id": "mp-2", "last_updated": datetime(2026, 1, 1)},
-                ],
-                "dois": [
-                    {
-                        "material_id": "mp-1",
-                        "osti_id": 101,
-                        "date_metadata_updated": datetime(2026, 1, 10),
-                    },
-                    {
-                        "material_id": "mp-2",
-                        "osti_id": 102,
-                        "date_metadata_updated": datetime(2026, 1, 5),
-                    },
-                ],
-            }
-        }
-    )
-
-    osti = OstiClient(mongo=client, db="mp_db")
-    result = osti.find_out_of_date_doi_entries("robocrys", "dois")
-
-    # only mp-1 was updated after the latest DOI metadata date (2026-01-10)
-    assert result == [101]
+    def post_new_record(self, record, state):
+        self.post_calls.append((record, state))
+        return self._created
 
 
-def test_find_out_of_date_doi_entries_contribs_kwargs():
-    client = _FakeClient(
-        {
-            "contribs_db": {
-                "projects": [
-                    {"identifier": "proj_a", "updated_at": datetime(2026, 4, 1)},
-                    {"identifier": "proj_b", "updated_at": datetime(2026, 2, 1)},
-                ],
-                "contribs_dois": [
-                    {
-                        "identifier": "proj_a",
-                        "osti_id": 201,
-                        "date_metadata_updated": datetime(2026, 3, 1),
-                    },
-                    {
-                        "identifier": "proj_b",
-                        "osti_id": 202,
-                        "date_metadata_updated": datetime(2026, 3, 2),
-                    },
-                ],
-            }
-        }
-    )
+def test_wait_for_release_returns_when_released(monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    elink = _FakeElink(statuses=["SV", "SR", "R"])
+    osti = OstiClient(elink)
 
-    osti = OstiClient(mongo=client, db="contribs_db")
-    result = osti.find_out_of_date_doi_entries(
-        "projects",
-        "contribs_dois",
-        source_key="identifier",
-        source_timestamp="updated_at",
-        doi_match_key="identifier",
-    )
+    record = osti.wait_for_release(999, interval=0.0)
 
-    # latest contribs DOI metadata date is 2026-03-02; only proj_a updated after it
-    assert result == [201]
+    assert record.workflow_status == "R"
+    assert record.osti_id == 999
+
+
+@pytest.mark.parametrize("failure", ["SF", "SX"])
+def test_wait_for_release_raises_on_terminal_failure(monkeypatch, failure):
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    elink = _FakeElink(statuses=["SV", failure])
+    osti = OstiClient(elink)
+
+    with pytest.raises(RuntimeError):
+        osti.wait_for_release(999, interval=0.0)
+
+
+def test_wait_for_release_times_out(monkeypatch):
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    # never reaches "R"; timeout=0 trips the deadline on the first poll
+    elink = _FakeElink(statuses=["SV", "SV", "SV"])
+    osti = OstiClient(elink)
+
+    with pytest.raises(TimeoutError):
+        osti.wait_for_release(999, timeout=0.0, interval=0.0)
+
+
+def test_find_or_create_creates_when_absent():
+    created = SimpleNamespace(osti_id=1, site_unique_id="contribs:proj_a")
+    elink = _FakeElink(query_result=_FakeQuery([]), created=created)
+    osti = OstiClient(elink)
+    record = SimpleNamespace(site_unique_id="contribs:proj_a")
+
+    result = osti.find_or_create(record, state="save")
+
+    assert result is created
+    assert elink.post_calls == [(record, "save")]
+    assert elink.query_calls == [{"site_unique_id": "contribs:proj_a"}]
+
+
+def test_find_or_create_returns_existing_without_posting():
+    existing = SimpleNamespace(osti_id=42, site_unique_id="contribs:proj_a")
+    elink = _FakeElink(query_result=_FakeQuery([existing]))
+    osti = OstiClient(elink)
+    record = SimpleNamespace(site_unique_id="contribs:proj_a")
+
+    result = osti.find_or_create(record)
+
+    assert result is existing
+    assert elink.post_calls == []  # no write when a record already exists
+
+
+def test_find_or_create_raises_on_duplicate_matches():
+    dupes = [SimpleNamespace(osti_id=1), SimpleNamespace(osti_id=2)]
+    elink = _FakeElink(query_result=_FakeQuery(dupes))
+    osti = OstiClient(elink)
+    record = SimpleNamespace(site_unique_id="contribs:proj_a")
+
+    with pytest.raises(RuntimeError):
+        osti.find_or_create(record)
+    assert elink.post_calls == []
+
+
+def test_find_or_create_requires_site_unique_id():
+    elink = _FakeElink(query_result=_FakeQuery([]))
+    osti = OstiClient(elink)
+    record = SimpleNamespace(site_unique_id=None)
+
+    with pytest.raises(ValueError):
+        osti.find_or_create(record)
+    assert elink.query_calls == []  # fails before any lookup

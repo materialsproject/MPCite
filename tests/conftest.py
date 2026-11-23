@@ -9,7 +9,7 @@ def elink_review_client():
     """Raw review-environment Elink client.
 
     Skips the dependent test when ``ELINK_REVIEW_API_TOKEN`` is unset so the offline
-    suite (model + mongo tests) still runs without credentials.
+    suite (model + core-logic tests) still runs without credentials.
 
     Returns:
         A :class:`elinkapi.Elink` client pointed at the review environment.

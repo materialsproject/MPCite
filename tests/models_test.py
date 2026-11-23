@@ -1,13 +1,10 @@
-"""Offline tests for the DOI record templates and stored models (no network)."""
-
-from datetime import datetime
+"""Offline tests for the DOI record submission templates (no network)."""
 
 import pytest
 from pydantic import ValidationError
 
 from mp_cite import (
     Affiliation,
-    ContribsDoiModel,
     ContribsDoiRequest,
     Identifier,
     MinimumDARecord,
@@ -101,25 +98,33 @@ def test_contribs_request_related_dois_use_is_supplement_to():
     assert rel["relation"] == "IsSupplementTo"
 
 
-def test_contribs_request_requires_title_and_site_url():
-    with pytest.raises(ValidationError):
-        ContribsDoiRequest(site_url="https://example.org")  # missing title
-    with pytest.raises(ValidationError):
-        ContribsDoiRequest(title="No landing page")  # missing site_url
-
-
-def test_contribs_doi_model_has_no_material_id():
-    stored = ContribsDoiModel(
-        doi="10.17188/abc123",
-        title="My Contributed Dataset",
-        osti_id=999,
-        site_unique_id="my_project",
-        site_url="https://contribs.materialsproject.org/projects/my_project",
-        workflow_status="SV",
-        date_submitted_to_osti_first=datetime(2026, 1, 1),
-        date_submitted_to_osti_last=datetime(2026, 1, 2),
+@pytest.mark.parametrize(
+    "missing", ["title", "site_url", "persons", "organizations", "description"]
+)
+def test_contribs_request_required_fields(missing):
+    """Each MP-required field must be supplied; dropping any one fails validation."""
+    full = dict(
+        title="A Contributed Dataset",
+        site_url="https://contribs.materialsproject.org/projects/p",
+        description="A contributed dataset.",
+        persons=[Person(type="AUTHOR", last_name="Doe")],
+        organizations=[Organization(type="SPONSOR", name="Some Funder")],
     )
+    # the complete set is valid...
+    ContribsDoiRequest(**full)
+    # ...but omitting any single required field is not
+    with pytest.raises(ValidationError):
+        ContribsDoiRequest(**{k: v for k, v in full.items() if k != missing})
 
-    assert not hasattr(stored, "material_id")
-    assert "material_id" not in stored.model_dump()
-    assert stored.site_unique_id == "my_project"
+
+def test_contribs_request_keywords_and_related_identifiers_optional():
+    """keywords and related_identifiers stay optional (inherited from Record)."""
+    request = ContribsDoiRequest(
+        title="A Contributed Dataset",
+        site_url="https://contribs.materialsproject.org/projects/p",
+        description="A contributed dataset.",
+        persons=[Person(type="AUTHOR", last_name="Doe")],
+        organizations=[Organization(type="SPONSOR", name="Some Funder")],
+    )
+    assert request.keywords is None
+    assert request.related_identifiers is None
