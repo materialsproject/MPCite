@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from elinkapi.record import WorkflowStatus
 
+from mp_cite.models import validate_site_unique_id
 from mp_cite.settings import get_elink_client
 
 if TYPE_CHECKING:
@@ -162,18 +163,13 @@ class OstiClient:
             response for the record just created.
 
         Raises:
-            ValueError: If ``record.site_unique_id`` is unset or empty, so a lookup key
-                cannot be formed.
+            ValueError: If ``record.site_unique_id`` is unset, empty, or not a
+                well-formed namespaced id (see :func:`mp_cite.site_id.validate_site_unique_id`).
             RuntimeError: If more than one record already matches ``site_unique_id`` (the
                 namespacing scheme is meant to make this impossible, so it signals a data
                 problem rather than a normal outcome).
         """
-        site_unique_id = record.site_unique_id
-        if not site_unique_id:
-            raise ValueError(
-                "record.site_unique_id must be set to find-or-create; it is the lookup "
-                "key (e.g. 'core-sub:{uuid}', 'contribs:{project_id}', or an 'mp-id')."
-            )
+        site_unique_id = validate_site_unique_id(record.site_unique_id)
 
         query = self.query_records(site_unique_id=site_unique_id)
         if query.total_rows == 0:

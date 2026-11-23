@@ -128,3 +128,43 @@ def test_contribs_request_keywords_and_related_identifiers_optional():
     )
     assert request.keywords is None
     assert request.related_identifiers is None
+
+
+# --- site_unique_id namespace enforcement on the templates ------------------------
+
+_UUID = "12345678-1234-5678-1234-567812345678"
+
+
+def _contribs(**overrides):
+    kwargs = dict(
+        title="A Contributed Dataset",
+        site_url="https://contribs.materialsproject.org/projects/p",
+        description="A contributed dataset.",
+        persons=[Person(type="AUTHOR", last_name="Doe")],
+        organizations=[Organization(type="SPONSOR", name="Some Funder")],
+    )
+    kwargs.update(overrides)
+    return ContribsDoiRequest(**kwargs)
+
+
+@pytest.mark.parametrize("site_unique_id", [f"core-sub:{_UUID}", "mp-1234"])
+def test_minimum_da_record_accepts_core_namespaces(site_unique_id):
+    record = MinimumDARecord(title="Core Data", site_unique_id=site_unique_id)
+    assert record.site_unique_id == site_unique_id
+
+
+def test_minimum_da_record_rejects_contribs_namespace():
+    with pytest.raises(ValidationError):
+        MinimumDARecord(title="Core Data", site_unique_id="contribs:some_project")
+
+
+def test_contribs_request_accepts_contribs_namespace():
+    assert _contribs(site_unique_id="contribs:my_project").site_unique_id == (
+        "contribs:my_project"
+    )
+
+
+@pytest.mark.parametrize("bad", ["mp-1234", f"core-sub:{_UUID}", "bare"])
+def test_contribs_request_rejects_non_contribs_namespace(bad):
+    with pytest.raises(ValidationError):
+        _contribs(site_unique_id=bad)
