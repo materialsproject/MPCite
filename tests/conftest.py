@@ -1,11 +1,19 @@
-import os
-
 import pytest
-from elinkapi import Elink
+
+from mp_cite.settings import ElinkSettings, get_elink_client
 
 
 @pytest.fixture
 def elink_review_client():
-    review_endpoint = os.getenv("ELINK_REVIEW_ENDPOINT")
-    elink_review_api_key = os.getenv("ELINK_REVIEW_API_TOKEN")
-    return Elink(token=elink_review_api_key, target=review_endpoint)
+    """Review-environment Elink client.
+
+    Skips the dependent test when ``ELINK_REVIEW_API_TOKEN`` is unset so the offline
+    suite (model + mongo tests) still runs without credentials.
+
+    Returns:
+        A :class:`elinkapi.Elink` client pointed at the review environment.
+    """
+    settings = ElinkSettings()
+    if not settings.review_api_token:
+        pytest.skip("ELINK_REVIEW_API_TOKEN not set; skipping live review-env test")
+    return get_elink_client(review=True, settings=settings)

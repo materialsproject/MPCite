@@ -1,5 +1,14 @@
 from elinkapi.record import RecordResponse
 
+from mp_cite import (
+    ContribsDoiRequest,
+    Organization,
+    Person,
+    delete_osti_record,
+    submit_new_osti_record,
+    update_state_of_osti_record,
+)
+
 # TODO: Write tests that verify our usage of Elink is correct,
 #       and make sure any upstream breaking changes get caught
 #       here when version upgrades happen
@@ -14,3 +23,32 @@ from elinkapi.record import RecordResponse
 def test_elink_query(elink_review_client):
     # placeholder, just to verify gh actions until full test suite is done
     assert isinstance(next(elink_review_client.query_records()), RecordResponse)
+
+
+def test_contribs_record_roundtrip(elink_review_client):
+    """Save -> fetch -> re-save -> delete a contributed-dataset record in the review env.
+
+    Uses state="save" (a draft) throughout so the test never actually releases a DOI.
+    Skipped automatically when ELINK_REVIEW_API_TOKEN is unset (see conftest fixture).
+    """
+    request = ContribsDoiRequest(
+        title="mp_cite integration test — contributed dataset",
+        site_url="https://contribs.materialsproject.org/projects/mp_cite_test",
+        description="Temporary record created by the mp_cite test suite.",
+        persons=[Person(type="AUTHOR", first_name="Test", last_name="Author")],
+        organizations=[Organization(type="SPONSOR", name="Test Non-DOE Sponsor")],
+    )
+
+    created = submit_new_osti_record(elink_review_client, request, state="save")
+    osti_id = created.osti_id
+    try:
+        fetched = elink_review_client.get_single_record(osti_id)
+        assert fetched.osti_id == osti_id
+        assert fetched.title == request.title
+
+        resaved = update_state_of_osti_record(elink_review_client, osti_id, "save")
+        assert isinstance(resaved, RecordResponse)
+    finally:
+        assert delete_osti_record(
+            elink_review_client, osti_id, reason="mp_cite test cleanup"
+        )
