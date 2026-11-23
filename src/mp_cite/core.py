@@ -1,10 +1,13 @@
-from typing import Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
-import requests
-from elinkapi import Elink, Record
-from elinkapi.record import RecordResponse
-from elinkapi.utils import Validation
-from pymongo import MongoClient
+from mp_cite.settings import get_elink_client, get_mongo_client
+
+if TYPE_CHECKING:
+    from mp_cite.settings import ElinkSettings, MongoSettings
+    from pymongo import MongoClient
+    from elinkapi.record import RecordResponse
+    from elinkapi import Elink, Record
+    from elinkapi.query import Query
 
 OstiID: TypeAlias = int
 

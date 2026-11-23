@@ -1,7 +1,10 @@
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
-from elinkapi import Elink
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from elinkapi import Elink
+    from pymongo import MongoClient
 
 PROD_ENDPOINT = "https://www.osti.gov/elink2api/"
 REVIEW_ENDPOINT = "https://review.osti.gov/elink2api/"
@@ -37,7 +40,7 @@ class ElinkSettings(BaseSettings):
 
 def get_elink_client(
     review: bool = True, settings: ElinkSettings | None = None
-) -> Elink:
+) -> "Elink":
     """Build an :class:`elinkapi.Elink` client for the review or production environment.
 
     Args:
@@ -53,6 +56,8 @@ def get_elink_client(
         the corresponding environment variable is unset; E-Link calls will then fail
         with an auth error, which surfaces the missing-configuration problem clearly.
     """
+    from elinkapi import Elink
+
     settings = settings or ElinkSettings()
 
     if review:

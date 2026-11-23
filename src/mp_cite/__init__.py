@@ -1,50 +1,94 @@
-from elinkapi import (
-    Affiliation,
-    Identifier,
-    Organization,
-    Person,
-    RelatedIdentifier,
-)
+from typing import TYPE_CHECKING
 
-from mp_cite.core import (
-    delete_osti_record,
-    find_out_of_date_doi_entries,
-    submit_new_osti_record,
-    update_existing_osti_record,
-    update_state_of_osti_record,
-)
-from mp_cite.models import (
-    MP_SPONSOR_IDENTIFIERS,
-    MP_SPONSOR_NAME,
-    ContribsDoiModel,
-    ContribsDoiRequest,
-    DOIModel,
-    MinimumDARecord,
-)
-from mp_cite.settings import ElinkSettings, get_elink_client
+# Map each public name to the submodule that defines it. Kept in sync with
+# ``__all__``; ``_SUBMODULE_FOR`` is derived from it.
+_NAMES_BY_SUBMODULE: dict[str, tuple[str, ...]] = {
+    "mp_cite.core": ("OstiClient",),
+    "mp_cite.models": (
+        "MP_SPONSOR_NAME",
+        "MP_SPONSOR_IDENTIFIERS",
+        "MinimumDARecord",
+        "ContribsDoiRequest",
+        "DOIModel",
+        "ContribsDoiModel",
+    ),
+    "mp_cite.settings": (
+        "get_elink_client",
+        "ElinkSettings",
+        "get_mongo_client",
+        "MongoSettings",
+    ),
+    "elinkapi": (
+        "Person",
+        "Organization",
+        "Affiliation",
+        "Identifier",
+        "RelatedIdentifier",
+    ),
+}
+_SUBMODULE_FOR: dict[str, str] = {
+    name: module for module, names in _NAMES_BY_SUBMODULE.items() for name in names
+}
 
 __all__ = [
-    # flow
-    "submit_new_osti_record",
-    "update_existing_osti_record",
-    "update_state_of_osti_record",
-    "delete_osti_record",
-    "find_out_of_date_doi_entries",
-    # core sponsor constants
+    "OstiClient",
     "MP_SPONSOR_NAME",
     "MP_SPONSOR_IDENTIFIERS",
-    # templates / stored models
     "MinimumDARecord",
     "ContribsDoiRequest",
     "DOIModel",
     "ContribsDoiModel",
-    # config
     "get_elink_client",
     "ElinkSettings",
-    # re-exported elinkapi sub-objects
+    "get_mongo_client",
+    "MongoSettings",
     "Person",
     "Organization",
     "Affiliation",
     "Identifier",
     "RelatedIdentifier",
 ]
+assert set(__all__) == set(_SUBMODULE_FOR), "__all__ out of sync with _SUBMODULE_FOR"
+
+
+def __getattr__(name: str) -> object:
+    """Import and cache a public name on first access (PEP 562)."""
+    module_name = _SUBMODULE_FOR.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+
+    value = getattr(importlib.import_module(module_name), name)
+    globals()[name] = value  # cache so __getattr__ is not called again for `name`
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)
+
+
+if TYPE_CHECKING:
+    # Give type checkers and IDEs the real symbols; never executed at runtime.
+    from elinkapi import (
+        Affiliation,
+        Identifier,
+        Organization,
+        Person,
+        RelatedIdentifier,
+    )
+
+    from mp_cite.core import OstiClient
+    from mp_cite.models import (
+        MP_SPONSOR_IDENTIFIERS,
+        MP_SPONSOR_NAME,
+        ContribsDoiModel,
+        ContribsDoiRequest,
+        DOIModel,
+        MinimumDARecord,
+    )
+    from mp_cite.settings import (
+        ElinkSettings,
+        MongoSettings,
+        get_elink_client,
+        get_mongo_client,
+    )
