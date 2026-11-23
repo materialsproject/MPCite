@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from mp_cite import find_out_of_date_doi_entries
+from mp_cite import OstiClient
 
 
 class _FakeCollection:
@@ -80,7 +80,8 @@ def test_find_out_of_date_doi_entries_core_defaults():
         }
     )
 
-    result = find_out_of_date_doi_entries(client, "mp_db", "robocrys", "dois")
+    osti = OstiClient(mongo=client, db="mp_db")
+    result = osti.find_out_of_date_doi_entries("robocrys", "dois")
 
     # only mp-1 was updated after the latest DOI metadata date (2026-01-10)
     assert result == [101]
@@ -110,9 +111,8 @@ def test_find_out_of_date_doi_entries_contribs_kwargs():
         }
     )
 
-    result = find_out_of_date_doi_entries(
-        client,
-        "contribs_db",
+    osti = OstiClient(mongo=client, db="contribs_db")
+    result = osti.find_out_of_date_doi_entries(
         "projects",
         "contribs_dois",
         source_key="identifier",
