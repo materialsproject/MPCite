@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from elinkapi.record import WorkflowStatus
@@ -292,8 +293,6 @@ class OstiClient:
                  and so will never be released.
             TimeoutError: If the record is not released within ``timeout`` seconds.
         """
-        import time
-
         # WorkflowStatus is a plain Enum (not str-based) while ``workflow_status`` is a
         # str, so compare against ``.value``, not the members themselves.
         deadline = time.monotonic() + timeout
