@@ -208,6 +208,8 @@ class ContribsDoiRequest(Record):
             is the exact DOE program office (for DOE funders) and each award number is
             an ``Identifier`` of type ``CN_DOE`` (DOE) or ``CN_NONDOE`` (non-DOE).
         description: The MPContribs project description.
+        doi_infix: The custom infix OSTI inserts into the minted DOI, defaulting to
+            ``"MPContribs"`` so contributed-dataset DOIs are branded as such.
         keywords: Optional. Keywords associated with this DOI.
         related_identifiers: Optional. DOIs of publications the data supports, recorded
             as ``type="DOI", relation="IsSupplementTo"``.
@@ -222,6 +224,7 @@ class ContribsDoiRequest(Record):
     description: str  # MPContribs project description
     doe_funded_flag: str = Field(default="N")  # Bool-like, but ELink is a `Y`/`N` str
     access_limitations: list[str] = Field(default_factory=lambda: ["UNL"])
+    doi_infix: str = Field(default="MPContribs")
     publication_date: date = Field(default_factory=date.today)
 
     @field_validator("site_unique_id")
