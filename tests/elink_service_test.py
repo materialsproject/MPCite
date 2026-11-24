@@ -1,4 +1,13 @@
+import os
+
+import pytest
 from elinkapi.record import RecordResponse
+
+from mp_cite import (
+    ContribsDoiRequest,
+    Organization,
+    Person,
+)
 
 # TODO: Write tests that verify our usage of Elink is correct,
 #       and make sure any upstream breaking changes get caught
@@ -11,6 +20,119 @@ from elinkapi.record import RecordResponse
 # 5+. test any other surfaces of the Elink api that we interact with
 
 
-def test_elink_query(elink_review_client):
+def test_elink_query(osti_review_client):
     # placeholder, just to verify gh actions until full test suite is done
-    assert isinstance(next(elink_review_client.query_records()), RecordResponse)
+    assert isinstance(next(osti_review_client.query_records()), RecordResponse)
+
+
+def test_contribs_record_roundtrip(osti_review_client):
+    """Save -> fetch -> re-save -> delete a contributed-dataset record in the review env.
+
+    Uses state="save" (a draft) throughout so the test never actually releases a DOI.
+    Skipped automatically when ELINK_REVIEW_API_TOKEN is unset (see conftest fixture).
+    """
+    request = ContribsDoiRequest(
+        title="mp_cite integration test — contributed dataset",
+        site_url="https://contribs.materialsproject.org/projects/mp_cite_test",
+        description="Temporary record created by the mp_cite test suite.",
+        persons=[Person(type="AUTHOR", first_name="Test", last_name="Author")],
+        organizations=[Organization(type="SPONSOR", name="Test Non-DOE Sponsor")],
+    )
+
+    created = osti_review_client.submit_new_record(request, state="save")
+    osti_id = created.osti_id
+    try:
+        fetched = osti_review_client.get_record(osti_id)
+        assert fetched.osti_id == osti_id
+        assert fetched.title == request.title
+
+        resaved = osti_review_client.update_state(osti_id, "save")
+        assert isinstance(resaved, RecordResponse)
+    finally:
+        # delete_record raises on failure; a plain return means the record is gone.
+        osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+
+
+@pytest.mark.skipif(
+    not os.getenv("ELINK_RUN_RELEASE_TESTS"),
+    reason="release+revise cycle is slow; set ELINK_RUN_RELEASE_TESTS=1 to run",
+)
+def test_revise_released_record(osti_review_client):
+    """Resolve D1 O-14: confirm OSTI accepts a revision of an already-released record.
+
+    Submits a contributed record, waits for release (workflow_status 'R'), then revises
+    it via update_record_fields (state="submit", which produces a new revision). Opt-in
+    through ELINK_RUN_RELEASE_TESTS because the release step can take minutes in the
+    review environment.
+    """
+    request = ContribsDoiRequest(
+        title="mp_cite integration test — revise released",
+        site_url="https://contribs.materialsproject.org/projects/mp_cite_revise_test",
+        description="Temporary record created by the mp_cite test suite.",
+        persons=[Person(type="AUTHOR", first_name="Test", last_name="Author")],
+        organizations=[Organization(type="SPONSOR", name="Test Non-DOE Sponsor")],
+    )
+
+    created = osti_review_client.submit_new_record(request, state="submit")
+    osti_id = created.osti_id
+    try:
+        osti_review_client.wait_for_release(osti_id, timeout=600.0, interval=20.0)
+
+        # The revision of a released record: same update path, new revision.
+        revised = osti_review_client.update_record_fields(
+            osti_id,
+            {"title": "mp_cite integration test — revised title"},
+            state="submit",
+        )
+        assert isinstance(revised, RecordResponse)
+        assert revised.osti_id == osti_id
+    finally:
+        # A released DOI may not be deletable; clean up best-effort without masking the
+        # test result.
+        try:
+            osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+        except Exception:
+            pass
+
+
+@pytest.mark.skipif(
+    not os.getenv("ELINK_RUN_RELEASE_TESTS"),
+    reason="submits a record to OSTI; set ELINK_RUN_RELEASE_TESTS=1 to run",
+)
+def test_patch_can_change_state_only(osti_review_client):
+    """Precondition for making update_state PATCH-based.
+
+    Verifies that a *content-free* PATCH changes only the workflow state: the state is a
+    URL path segment on the patch endpoint (`/records/{id}/{state}`), so an empty
+    operation list sent to the ``submit`` URL should advance the record off 'SA' (Saved)
+    while leaving its fields untouched.
+
+    If OSTI rejects the empty ``[]`` body, the state-only patch must instead carry a
+    content-neutral op that OSTI supports (``add``/``replace``/``copy``/``move``/
+    ``remove`` -- note ``test`` is *not* listed), e.g. replacing a field with its current
+    value: ``[{"op": "replace", "path": "/title", "value": created.title}]``.
+    """
+    request = ContribsDoiRequest(
+        title="mp_cite integration test — state-only patch",
+        site_url="https://contribs.materialsproject.org/projects/mp_cite_state_test",
+        description="Temporary record created by the mp_cite test suite.",
+        persons=[Person(type="AUTHOR", first_name="Test", last_name="Author")],
+        organizations=[Organization(type="SPONSOR", name="Test Non-DOE Sponsor")],
+    )
+
+    created = osti_review_client.submit_new_record(request, state="save")
+    osti_id = created.osti_id
+    assert created.workflow_status == "SA"  # a freshly saved draft
+    try:
+        # Empty patch at the "submit" URL: no field changes, state transition only.
+        patched = osti_review_client.elink.patch_json(osti_id, [], state="submit")
+
+        assert isinstance(patched, RecordResponse)
+        assert patched.osti_id == osti_id
+        assert patched.title == request.title  # content untouched
+        assert patched.workflow_status != "SA"  # state advanced past the draft
+    finally:
+        try:
+            osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+        except Exception:
+            pass
