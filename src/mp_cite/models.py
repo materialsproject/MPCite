@@ -1,6 +1,6 @@
 import re
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import date
 from typing import Literal
 from uuid import UUID
 
@@ -186,9 +186,7 @@ class MinimumDARecord(Record):
     )
     site_ownership_code: str = Field(default="LBNL-MP")
     access_limitations: list[str] = Field(default_factory=lambda: ["UNL"])
-    publication_date: datetime = Field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
-    )
+    publication_date: date = Field(default_factory=date.today)
     site_url: str = Field(default="https://next-gen.materialsproject.org/materials")
 
     @field_validator("site_unique_id")
@@ -224,9 +222,7 @@ class ContribsDoiRequest(Record):
     description: str  # MPContribs project description
     doe_funded_flag: str = Field(default="N")  # Bool-like, but ELink is a `Y`/`N` str
     access_limitations: list[str] = Field(default_factory=lambda: ["UNL"])
-    publication_date: datetime = Field(
-        default_factory=lambda: datetime.now(tz=timezone.utc)
-    )
+    publication_date: date = Field(default_factory=date.today)
 
     @field_validator("site_unique_id")
     @classmethod
