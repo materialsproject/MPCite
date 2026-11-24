@@ -93,3 +93,46 @@ def test_revise_released_record(osti_review_client):
             osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
         except Exception:
             pass
+
+
+@pytest.mark.skipif(
+    not os.getenv("ELINK_RUN_RELEASE_TESTS"),
+    reason="submits a record to OSTI; set ELINK_RUN_RELEASE_TESTS=1 to run",
+)
+def test_patch_can_change_state_only(osti_review_client):
+    """Precondition for making update_state PATCH-based.
+
+    Verifies that a *content-free* PATCH changes only the workflow state: the state is a
+    URL path segment on the patch endpoint (`/records/{id}/{state}`), so an empty
+    operation list sent to the ``submit`` URL should advance the record off 'SA' (Saved)
+    while leaving its fields untouched.
+
+    If OSTI rejects the empty ``[]`` body, the state-only patch must instead carry a
+    content-neutral op that OSTI supports (``add``/``replace``/``copy``/``move``/
+    ``remove`` -- note ``test`` is *not* listed), e.g. replacing a field with its current
+    value: ``[{"op": "replace", "path": "/title", "value": created.title}]``.
+    """
+    request = ContribsDoiRequest(
+        title="mp_cite integration test — state-only patch",
+        site_url="https://contribs.materialsproject.org/projects/mp_cite_state_test",
+        description="Temporary record created by the mp_cite test suite.",
+        persons=[Person(type="AUTHOR", first_name="Test", last_name="Author")],
+        organizations=[Organization(type="SPONSOR", name="Test Non-DOE Sponsor")],
+    )
+
+    created = osti_review_client.submit_new_record(request, state="save")
+    osti_id = created.osti_id
+    assert created.workflow_status == "SA"  # a freshly saved draft
+    try:
+        # Empty patch at the "submit" URL: no field changes, state transition only.
+        patched = osti_review_client.elink.patch_json(osti_id, [], state="submit")
+
+        assert isinstance(patched, RecordResponse)
+        assert patched.osti_id == osti_id
+        assert patched.title == request.title  # content untouched
+        assert patched.workflow_status != "SA"  # state advanced past the draft
+    finally:
+        try:
+            osti_review_client.delete_record(osti_id, reason="mp_cite test cleanup")
+        except Exception:
+            pass
